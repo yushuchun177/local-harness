@@ -19,7 +19,7 @@ lines = "\n".join('    "%s"' % b64[i:i + 76] for i in range(0, len(b64), 76))
 TEMPLATE = '''# -*- coding: utf-8 -*-
 """品牌信息：名称、版本、图标。图标是 64×64 PNG 的 base64，直接交给 tk。"""
 
-APP_NAME = "本地千问"
+APP_NAME = "local-harness"
 APP_EN = "LocalChat"
 VERSION = "1.1.0"
 BUILD = "2026.11"

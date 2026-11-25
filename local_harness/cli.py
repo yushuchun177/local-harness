@@ -19,7 +19,7 @@ from .assets import base_dir, find_llama_cli, find_model, find_all_models
 def build_parser():
     p = argparse.ArgumentParser(
         prog="localchat",
-        description="本地千问 —— 纯终端对话，完全离线，不联网。",
+        description="local-harness —— 纯终端对话，完全离线，不联网。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 例子：

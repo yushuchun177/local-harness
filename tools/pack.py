@@ -7,11 +7,11 @@
 # 第 3 版（或你选择的任何更新版本）的条款重新发布和/或修改它。
 # 本程序按“没有任何担保”发布，完整条款见项目根目录的 LICENSE 文件。
 # =============================================================================
-"""打包绿色版：生成 pack\\本地千问-<版本>\\，可选打 zip。
+"""打包绿色版：生成 pack\\local-harness-<版本>\\，可选打 zip。
 
 用法：
     python tools/pack.py            # 只生成目录
-    python tools/pack.py --zip      # 同时打 dist\\本地千问-<版本>-Windows-x64.zip
+    python tools/pack.py --zip      # 同时打 dist\\local-harness-<版本>-Windows-x64.zip
 """
 
 import json

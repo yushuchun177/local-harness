@@ -252,7 +252,7 @@ class App:
     def banner(self):
         o = self.opts
         print()
-        print(c(BOLD, "  本地千问") + c(DIM, "  ·  纯终端，完全离线"))
+        print(c(BOLD, "  local-harness") + c(DIM, "  ·  纯终端，完全离线"))
         print(c(DIM, "  " + "-" * 52))
         print(c(DIM, "  模型    ") + os.path.basename(o.model))
         print(
