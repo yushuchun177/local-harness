@@ -1239,10 +1239,14 @@ class App:
 
         if not self.llama_cli or not getattr(self, "_current_model", None):
             return None
+        step = int(self.cfg.get("compress_step") or 1024)
+        threshold = int(self.cfg.get("compress_threshold") or 2048)
+        # 阈值只有 1024 / 2048 / 3072 / 4096 四档，旧配置超出范围就收回来
+        threshold = max(step, min(step * 4, threshold))
         now = (
             self._current_model,
-            int(self.cfg.get("compress_threshold") or 2048),
-            int(self.cfg.get("compress_step") or 1024),
+            threshold,
+            step,
             int(self.cfg.get("compress_keep") or 4),
         )
         if getattr(self, "_compressor_key", None) != now:
@@ -1282,7 +1286,8 @@ class App:
         except Exception:
             n = None
         self._token_count = n or 0
-        threshold = int(self.cfg.get("compress_threshold") or 2048)
+        step = int(self.cfg.get("compress_step") or 1024)
+        threshold = max(step, min(step * 4, int(self.cfg.get("compress_threshold") or 2048)))
         if n is None or n < threshold:
             return False
 
@@ -2376,7 +2381,7 @@ class SettingsDialog(tk.Toplevel):
             highlightthickness=0,
         ).pack(side="left")
 
-        # 阈值滑块：刻度 1024，范围 1024 ~ 16384
+        # 阈值滑块：1024 tokens 一档，可选 1024 / 2048 / 3072 / 4096
         thresh = tk.Frame(self, bg=t["bg"])
         thresh.pack(fill="x", padx=pad, pady=(8, 0))
         tk.Label(
@@ -2384,7 +2389,9 @@ class SettingsDialog(tk.Toplevel):
         ).pack(side="left")
 
         step = int(app.cfg.get("compress_step") or 1024)
-        self.thresh_var = tk.IntVar(value=int(app.cfg.get("compress_threshold") or 2048))
+        cur = int(app.cfg.get("compress_threshold") or 2048)
+        cur = max(step, min(step * 4, cur))
+        self.thresh_var = tk.IntVar(value=cur)
         self.thresh_lbl = tk.Label(
             thresh, text=str(self.thresh_var.get()), font=FONT_UI_S,
             fg=t["accent"], bg=t["bg"], width=7
@@ -2394,7 +2401,7 @@ class SettingsDialog(tk.Toplevel):
         tslider = tk.Scale(
             self,
             from_=step,
-            to=step * 16,
+            to=step * 4,
             resolution=step,
             orient="horizontal",
             variable=self.thresh_var,
@@ -2413,7 +2420,7 @@ class SettingsDialog(tk.Toplevel):
         tslider.pack(padx=pad, pady=(2, 0))
         tk.Label(
             self,
-            text="刻度 %d tokens ／ 当前对话占用会在状态栏显示" % step,
+            text="1024 tokens 一档，可选 1024 / 2048 / 3072 / 4096（默认 2048）",
             font=FONT_UI_S,
             fg=t["fg_faint"],
             bg=t["bg"],
@@ -2518,8 +2525,10 @@ class SettingsDialog(tk.Toplevel):
         app.cfg.set("system", text, save=False)
         app.cfg.set("threads", threads, save=False)
         app.cfg.set("compress_enabled", bool(self.compress_var.get()), save=False)
-        app.cfg.set("compress_threshold", int(self.thresh_var.get()), save=False)
-        app.cfg.set("compress_step", int(app.cfg.get("compress_step") or 1024), save=False)
+        step = int(app.cfg.get("compress_step") or 1024)
+        th = max(step, min(step * 4, int(self.thresh_var.get())))
+        app.cfg.set("compress_threshold", th, save=False)
+        app.cfg.set("compress_step", step, save=False)
         try:
             app.cfg.set("compress_keep", int(self.keep_var.get()), save=False)
         except ValueError:

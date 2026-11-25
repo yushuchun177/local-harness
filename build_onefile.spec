@@ -5,16 +5,15 @@
 运行时解包到临时目录（sys._MEIPASS）。config.json 和 chats\\ 仍然落在
 exe 旁边，所以换电脑照样是一个文件夹拷走。
 
-两种用法：
+用法：
 
-    # 1) 只有程序 + llama.cpp（约 55MB），模型放 exe 旁边的 model\ 里
     pyinstaller build_onefile.spec --noconfirm --distpath distone
 
-    # 2) 连模型一起塞进去（约 700MB，每次启动要多解压一会儿）
-    set LOCALCHAT_BUNDLE_MODEL=D:\\minimind\\dist\\LocalHarness\\model\\Qwen3-0.6B-Q8_0.gguf
-    pyinstaller build_onefile.spec --noconfirm --distpath distone
+产物约 48MB，只含程序本体与 llama.cpp 运行文件。**不打包任何模型权重**：
+用户自行下载 .gguf 放到 exe 旁边的 model\\ 目录，或用界面里的「导入」选文件夹。
+这是项目的硬性约定 —— 发布版本永远不附带模型。
 
-环境变量 LOCALCHAT_SPLASH=0 可以关掉启动画面（默认带模型的版本才开）。
+环境变量 LOCALCHAT_SPLASH=0 可以关掉启动画面（默认带）。
 """
 
 import os
@@ -24,7 +23,7 @@ ROOT = os.getcwd()
 
 def _pick_llama_dir():
     """优先用 tools/pack.py 精简过的那份 llama（26 个文件），省 25MB 体积。"""
-    for rel in (os.path.join("pack", "local-harness-1.1.0", "llama"), "llama"):
+    for rel in (os.path.join("pack", "local-harness-1.2.0", "llama"), "llama"):
         p = os.path.join(ROOT, rel)
         if os.path.isdir(p) and os.path.isfile(os.path.join(p, "llama-cli.exe")):
             return p
@@ -32,8 +31,7 @@ def _pick_llama_dir():
 
 
 LLAMA_DIR = _pick_llama_dir()
-BUNDLE_MODEL = os.environ.get("LOCALCHAT_BUNDLE_MODEL", "").strip()
-WANT_SPLASH = os.environ.get("LOCALCHAT_SPLASH", "1" if BUNDLE_MODEL else "0") == "1"
+WANT_SPLASH = os.environ.get("LOCALCHAT_SPLASH", "1") == "1"
 SPLASH_PNG = os.path.join(ROOT, "assets", "splash.png")
 
 EXCLUDES = [
@@ -55,11 +53,6 @@ for name in sorted(os.listdir(LLAMA_DIR)):
     src = os.path.join(LLAMA_DIR, name)
     if os.path.isfile(src):
         extra.append((src, os.path.join("llama")))
-
-if BUNDLE_MODEL:
-    if not os.path.isfile(BUNDLE_MODEL):
-        raise SystemExit("LOCALCHAT_BUNDLE_MODEL 指向的文件不存在：%s" % BUNDLE_MODEL)
-    extra.append((BUNDLE_MODEL, "model"))
 
 a = Analysis(
     ["main_gui.py"],

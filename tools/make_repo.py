@@ -35,7 +35,7 @@ ASSET_FILES = ["app.png", "app.ico", "app64.b64", "splash.png"]
 SKIP_SUFFIX = (".pyc", ".pyo")
 
 # 一次性迁移/截图脚本，不往仓库里放
-SKIP_FILES = {"rename_app.py", "shot_about.py"}
+SKIP_FILES = {"rename_app.py", "shot_about.py", "push_github.py", "make_release.py"}
 
 
 def copy_tree(src, dst):
