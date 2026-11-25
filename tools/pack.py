@@ -122,6 +122,15 @@ def main():
     os.makedirs(os.path.join(STAGE, "assets"))
     shutil.copy2(os.path.join(ROOT, "assets", "app.ico"), os.path.join(STAGE, "assets"))
 
+    # 4) 多语言使用手册
+    manual_src = os.path.join(ROOT, "docs", "manual")
+    if os.path.isdir(manual_src):
+        manual_dst = os.path.join(STAGE, "manual")
+        os.makedirs(manual_dst)
+        for name in sorted(os.listdir(manual_src)):
+            if name.endswith(".md"):
+                shutil.copy2(os.path.join(manual_src, name), manual_dst)
+
     total = 0
     for base, _dirs, files in os.walk(STAGE):
         for f in files:

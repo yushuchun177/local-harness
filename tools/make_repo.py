@@ -92,6 +92,11 @@ def main():
             if os.path.isfile(p):
                 shutil.copy2(p, os.path.join(dst_shots, dst_name))
 
+    # 多语言使用手册
+    manual = os.path.join(ROOT, "docs", "manual")
+    if os.path.isdir(manual):
+        copy_tree(manual, os.path.join(out, "docs", "manual"))
+
     total = 0
     count = 0
     for base, _dirs, files in os.walk(out):

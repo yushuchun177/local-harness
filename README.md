@@ -72,6 +72,21 @@ config.json            界面与参数设置（自动生成）
 - 程序目录可整体拷贝到其它电脑或 U 盘使用，`model\` 一并带走即可
 - 删除 `chats\` 中的文件即删除对应会话；删除 `config.json` 恢复默认设置
 
+## 使用手册（多语言）
+
+| 语言 | 手册 |
+| --- | --- |
+| 简体中文 | [docs/manual/zh-CN.md](docs/manual/zh-CN.md) |
+| English | [docs/manual/en.md](docs/manual/en.md) |
+| 繁體中文 | [docs/manual/zh-TW.md](docs/manual/zh-TW.md) |
+| 日本語 | [docs/manual/ja.md](docs/manual/ja.md) |
+| Русский | [docs/manual/ru.md](docs/manual/ru.md) |
+| Español | [docs/manual/es.md](docs/manual/es.md) |
+| Français | [docs/manual/fr.md](docs/manual/fr.md) |
+| Deutsch | [docs/manual/de.md](docs/manual/de.md) |
+
+手册涵盖：安装与启动、准备模型、界面说明、参数、上下文压缩、快捷键、数据与备份、常见问题、许可证。索引见 [docs/manual/README.md](docs/manual/README.md)。
+
 ## 兼容性
 
 - 模型：所有 llama.cpp 支持的 GGUF 模型。已验证：Qwen3-0.6B、Qwen3-1.7B、Qwen2.5-1.5B、Qwen2.5-3B、Llama-3.2-1B、SmolLM2-360M
