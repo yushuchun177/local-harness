@@ -1,0 +1,36 @@
+# 运行产物 / 用户数据
+config.json
+chats/
+*.log
+_MEI*/
+
+# 依赖的二进制与模型（不入库）
+llama/
+model/
+*.gguf
+*.dll
+*.exe
+!tools/*.py
+
+# 打包中间产物
+build*/
+dist*/
+distone*/
+pack/
+_single_test/
+*.spec.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.bak
+tmp/
