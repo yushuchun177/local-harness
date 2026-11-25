@@ -116,7 +116,13 @@ La compression automatique est active par défaut ; vérifiez le seuil dans « R
 **Le nom du modèle s'affiche comme « Qwen3 0.6B · Q8_0 »**
 C'est normal : le nom et la quantification proviennent des métadonnées GGUF.
 
-## 9. Licence
+## 9. Environnement de test
+
+Vérifié sur : Windows 11 (64 bits), Intel Core i5-4590 (4 cœurs / 4 threads, AVX2), 16 Go de RAM, inférence uniquement sur CPU, sans carte graphique dédiée.
+
+Vitesse de génération mesurée (4 threads, contexte 2048) : SmolLM2-360M environ 42 t/s, Llama-3.2-1B 21 t/s, Qwen3-0.6B 15 t/s, Qwen2.5-1.5B / Qwen3-1.7B environ 7 t/s, Qwen2.5-3B 6 t/s. Le tableau complet figure dans le README.
+
+## 10. Licence
 
 Ce projet est publié sous GPLv3. La distribution de binaires empaquetés est autorisée, mais toute distribution du programme (source ou binaire) doit être accompagnée du code source complet correspondant ; les versions modifiées doivent rester open source.
 

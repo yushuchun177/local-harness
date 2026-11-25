@@ -116,7 +116,13 @@ Automatic compression is on by default; check the threshold in Settings, or star
 **Model names look like "Qwen3 0.6B · Q8_0"**
 That is expected: the name and quantisation are read from the GGUF metadata.
 
-## 9. Licence
+## 9. Test environment
+
+Verified on: Windows 11 (64-bit), Intel Core i5-4590 (4 cores / 4 threads, AVX2), 16 GB RAM, CPU-only inference — no discrete GPU was used.
+
+Measured generation speed (4 threads, 2048 context): SmolLM2-360M about 42 t/s, Llama-3.2-1B 21 t/s, Qwen3-0.6B 15 t/s, Qwen2.5-1.5B / Qwen3-1.7B about 7 t/s, Qwen2.5-3B 6 t/s. The full hardware and model table is in the README.
+
+## 10. Licence
 
 This project is released under GPLv3. You may distribute packaged binaries, but whenever you distribute the program (source or binary) you must also provide the complete corresponding source code, and modified versions must remain open source under the same licence.
 

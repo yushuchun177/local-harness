@@ -87,6 +87,32 @@ config.json            界面与参数设置（自动生成）
 
 手册涵盖：安装与启动、准备模型、界面说明、参数、上下文压缩、快捷键、数据与备份、常见问题、许可证。索引见 [docs/manual/README.md](docs/manual/README.md)。
 
+## 测试环境
+
+下列数据来自一台普通台式机，用于说明实际可用性；不同硬件结果会有差异。
+
+| 项目 | 配置 |
+| --- | --- |
+| 系统 | Windows 11 专业版 26200（64 位） |
+| CPU | Intel Core i5-4590 @ 3.30GHz，4 核 4 线程（Haswell，支持 SSE4.2 / AVX / AVX2 / FMA3，无 AVX-512） |
+| 内存 | 16 GB |
+| 显卡 | NVIDIA GeForce GTX 1050 Ti 4GB（未参与推理，全程纯 CPU 运行） |
+| 推理引擎 | llama.cpp b12728（commit ea7229481），win-cpu-x64 预编译版，Clang 22.1.8 |
+| 构建环境 | Python 3.12 + PyInstaller 6.22（仅打包用，程序运行不依赖 Python） |
+
+实测速度：4 线程、上下文 2048，数字取自 llama-cli 输出的 `[ Prompt: … t/s | Generation: … t/s ]` 统计行。
+
+| 模型 | 文件大小 | 加载耗时 | Prompt 处理 | 生成速度 |
+| --- | --- | --- | --- | --- |
+| SmolLM2-360M Q8_0 | 369 MB | 1.6 s | 218.3 t/s | 42.1 t/s |
+| Qwen3-0.6B Q8_0 | 610 MB | 1.5 s | 71.7 t/s | 15.2 t/s |
+| Llama-3.2-1B Q4_K_M | 770 MB | 4.1 s | 113.1 t/s | 21.4 t/s |
+| Qwen2.5-1.5B Q4_K_M | 1.0 GB | 4.9 s | 42.5 t/s | 7.4 t/s |
+| Qwen3-1.7B Q8_0 | 1.7 GB | 8.9 s | 34.5 t/s | 7.1 t/s |
+| Qwen2.5-3B Q4_K_M | 2.0 GB | 10.7 s | 28.2 t/s | 6.1 t/s |
+
+t/s 为每秒 token 数；实际速度受输入长度、温度、系统负载影响，且在无 AVX-512、4 核的平台上测得，较新 CPU 会明显更快。GPU 未被使用，程序不做显存卸载。
+
 ## 兼容性
 
 - 模型：所有 llama.cpp 支持的 GGUF 模型。已验证：Qwen3-0.6B、Qwen3-1.7B、Qwen2.5-1.5B、Qwen2.5-3B、Llama-3.2-1B、SmolLM2-360M

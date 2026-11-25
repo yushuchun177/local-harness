@@ -116,7 +116,13 @@ Automatische Komprimierung ist standardmäßig aktiv; Schwellwert in den Einstel
 **Modellname erscheint als „Qwen3 0.6B · Q8_0“**
 Das ist korrekt: Name und Quantisierung werden aus den GGUF-Metadaten gelesen.
 
-## 9. Lizenz
+## 9. Testumgebung
+
+Geprüft auf: Windows 11 (64 Bit), Intel Core i5-4590 (4 Kerne / 4 Threads, AVX2), 16 GB RAM, reine CPU-Inferenz – keine dedizierte Grafikkarte im Einsatz.
+
+Gemessene Generierungsgeschwindigkeit (4 Threads, Kontext 2048): SmolLM2-360M etwa 42 t/s, Llama-3.2-1B 21 t/s, Qwen3-0.6B 15 t/s, Qwen2.5-1.5B / Qwen3-1.7B etwa 7 t/s, Qwen2.5-3B 6 t/s. Die vollständige Tabelle steht im README.
+
+## 10. Lizenz
 
 Dieses Projekt steht unter GPLv3. Das Paketieren und Verteilen von Binärdateien ist erlaubt, aber bei jeder Weitergabe des Programms (Quellcode oder Binärdatei) muss der vollständige zugehörige Quellcode mitgeliefert werden; geänderte Versionen müssen ebenfalls quelloffen bleiben.
 
