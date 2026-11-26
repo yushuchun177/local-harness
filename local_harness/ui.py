@@ -106,7 +106,13 @@ class App:
             threads=o.threads,
             reasoning=o.reasoning,
             system_prompt=o.system,
+            gpu_layers=getattr(o, "gpu_layers", 0) if getattr(o, "backend", "cpu") != "cpu" else 0,
+            flash_attn=bool(getattr(o, "flash_attn", False)),
+            tensor_core=bool(getattr(o, "tensor_core", False)),
         )
+        accel = self._accel_line(o)
+        if accel:
+            print(c(DIM, accel))
         try:
             self.chat = self._spawn(cfg)
         except LlamaError as e:
@@ -132,6 +138,26 @@ class App:
         ch = LlamaChat(self.opts.cli, self.opts.model, **cfg)
         ch.start(timeout=self.opts.timeout)
         return ch
+
+    def _accel_line(self, o):
+        """启动时打一行：用的哪个后端、多少层、张量核心开没开。"""
+        backend = getattr(o, "backend", "cpu")
+        if backend == "cpu":
+            return "加速：CPU"
+        ngl = int(getattr(o, "gpu_layers", -1))
+        name = {"cuda": "CUDA", "vulkan": "Vulkan", "hip": "HIP"}.get(backend, backend)
+        if ngl < 0:
+            layers = "全部层"
+        elif ngl == 0:
+            layers = "0 层"
+        else:
+            layers = "%d 层 + CPU" % ngl
+        bits = ["加速：" + name, layers]
+        if getattr(o, "tensor_core", False):
+            bits.append("张量核心开")
+        if getattr(o, "flash_attn", False):
+            bits.append("FlashAttention")
+        return " · ".join(bits)
 
     # ------------------------------------------------------------ 主循环
     def loop(self):

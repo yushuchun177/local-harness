@@ -44,7 +44,9 @@ def _walk(base, depth=3):
         yield cur, files
 
 
-LLAMA_NAMES = ("llama-cli.exe", "llama.exe", "main.exe")
+# Windows 的 llama.cpp 是 llama-cli.exe，Linux / macOS 没有扩展名。
+# 三个名字都认，这样同一个程序目录在哪个系统上都能找到。
+LLAMA_NAMES = ("llama-cli.exe", "llama-cli", "llama.exe", "main.exe", "main")
 
 # 这些不是"能聊天"的模型：视觉投影、向量化模型、重排模型
 _SKIP_HINTS = (
@@ -76,17 +78,33 @@ def is_chat_model(path):
     return True
 
 
-def find_llama_cli(explicit=None):
-    """找 llama.cpp 的命令行主程序。"""
+def find_llama_cli(explicit=None, backend=None):
+    """找 llama.cpp 的命令行主程序。
+
+    backend 给定时只看那个后端的目录（llama-cuda / llama-vulkan / llama），
+    否则按 CUDA → Vulkan → 其它 的顺序挑第一个能用的。
+    """
     if explicit:
         p = os.path.abspath(explicit)
         if os.path.isfile(p):
             return p
 
     base = bundle_dir()
+    gpu_dirs = ("llama-cuda", "llama-vulkan", "llama-rocm", "llama-hip")
+
+    if backend:
+        subs = []
+        if backend == "cpu":
+            subs = ["llama", ""]
+        elif backend in ("cuda", "vulkan", "hip"):
+            subs = ["llama-" + backend, "llama-rocm" if backend == "hip" else ""]
+        subs += ["", "bin", "llama.cpp", os.path.join("llama", "bin")]
+    else:
+        # 有显卡后端就优先用，没有就退回 llama\
+        subs = list(gpu_dirs) + ["", "llama", "bin", "llama.cpp", os.path.join("llama", "bin")]
 
     # 常见位置优先（单文件打包时这里就是 _MEIPASS）
-    for sub in ("", "llama", "bin", "llama.cpp", os.path.join("llama", "bin")):
+    for sub in subs:
         for name in LLAMA_NAMES:
             p = os.path.join(base, sub, name) if sub else os.path.join(base, name)
             if os.path.isfile(p):

@@ -45,6 +45,11 @@ Local-Harness 是 llama.cpp 的桌面端外壳：负责调起 `llama-cli`、读�
 - 张量核心（Tensor Core）检测与启用：计算能力 ≥ 7.0 的 NVIDIA 卡通过 MMQ 内核 + fp16 矩阵乘用上
 - FlashAttention 开关；状态栏实时显示当前生效的加速方式
 
+**平台**
+
+- Windows：绿色版 / 单文件版，图形界面
+- Linux / macOS：同一套代码，终端界面（`./run.sh`），同样支持 CUDA / Vulkan 与显卡加速，详见 [docs/LINUX.md](docs/LINUX.md)
+
 ## 使用须知
 
 **1. 必须自行准备模型（本程序不包含任何模型）**

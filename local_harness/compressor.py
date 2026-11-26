@@ -45,8 +45,14 @@ COMPRESS_PROMPT = """请把下面的对话历史压缩成一段简洁的中文�
 
 def count_tokens(cli_dir, model, text):
     """用 llama-tokenize 精确计数。返回 token 数；失败返回 None。"""
-    tok = os.path.join(cli_dir, "llama-tokenize.exe")
-    if not os.path.isfile(tok):
+    # Windows 是 llama-tokenize.exe，Linux / macOS 没有扩展名
+    tok = None
+    for name in ("llama-tokenize.exe", "llama-tokenize"):
+        p = os.path.join(cli_dir, name)
+        if os.path.isfile(p):
+            tok = p
+            break
+    if not tok:
         return None
 
     flags = 0

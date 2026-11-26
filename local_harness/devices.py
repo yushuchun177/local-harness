@@ -39,7 +39,7 @@ BACKEND_LABELS = {
     "hip": "HIP / ROCm（AMD）",
 }
 
-LLAMA_NAMES = ("llama-cli.exe", "llama.exe", "main.exe")
+LLAMA_NAMES = ("llama-cli.exe", "llama-cli", "llama.exe", "main.exe", "main")
 
 # Volta 起才有 Tensor Core
 TENSOR_CORE_MIN_CC = 7.0
@@ -59,38 +59,101 @@ def _run(cmd, timeout=8):
 
 
 def nvidia_smi_path():
+    """Windows 在 System32，Linux 在 PATH 里；两边都找一下。"""
     for p in (
         os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "nvidia-smi.exe"),
+        "/usr/bin/nvidia-smi",
+        "/usr/local/bin/nvidia-smi",
         "nvidia-smi",
     ):
-        if p == "nvidia-smi" or os.path.isfile(p):
+        if p in ("nvidia-smi", "/usr/bin/nvidia-smi", "/usr/local/bin/nvidia-smi"):
+            if p == "nvidia-smi" or os.path.isfile(p):
+                return p
+        elif os.path.isfile(p):
             return p
     return None
 
 
+# 老驱动不支持 `--query-gpu=compute_cap` 时，用型号名估算计算能力。
+# 顺序有讲究：先匹配更具体的型号，避免 "RTX 4090" 被 40xx 提前吃掉。
+_CC_BY_NAME = [
+    # 长的、具体的型号放前面，避免 "A100" 被 "A10" 抢先匹配
+    ("A100", 8.0), ("A800", 8.0), ("A30", 8.0),
+    ("H100", 9.0), ("H200", 9.0), ("H800", 9.0),
+    ("GTX 16", 7.5),
+    ("RTX 20", 7.5), ("RTX 20 SUPER", 7.5),
+    ("RTX 30", 8.6),
+    ("RTX 40", 8.9),
+    ("RTX 50", 12.0),
+    ("RTX A", 8.6), ("A40", 8.6), ("A10", 8.6), ("A16", 8.6),
+    ("L40", 8.9), ("L20", 8.9), ("L4", 8.9),
+    ("V100", 7.0), ("T4", 7.5), ("P100", 6.0), ("P40", 6.1), ("P4", 6.1),
+    ("GTX 10", 6.1), ("MX1", 6.1), ("MX2", 6.1), ("MX3", 6.1), ("MX4", 6.1),
+    ("GTX 9", 5.2),
+]
+
+
+def compute_by_name(name):
+    """从显卡型号猜计算能力；猜不到返回 0.0。"""
+    up = (name or "").upper()
+    for key, cc in _CC_BY_NAME:
+        if key in up:
+            return cc
+    return 0.0
+
+
 def nvidia_gpus():
-    """[{name, vram_mb, compute, driver, tensor_cores}]，没有 NVIDIA 卡就是空列表。"""
+    """[{name, vram_mb, compute, driver, tensor_cores}]，没有 NVIDIA 卡就是空列表。
+
+    先按 4 个字段查（含 compute_cap）；老驱动不支持这个字段会直接报错、
+    一行数据都不返回，这时退化成 3 个字段查，再用型号名估算计算能力。
+    """
     smi = nvidia_smi_path()
     if not smi:
         return []
+
+    rows = []
     out = _run([smi, "--query-gpu=name,memory.total,compute_cap,driver_version",
                 "--format=csv,noheader"])
-    gpus = []
     for line in out.splitlines():
         parts = [p.strip() for p in line.split(",")]
         if len(parts) < 4:
             continue
         try:
+            float(parts[2])
+        except Exception:
+            continue                      # 不是数字（可能整行是报错信息）
+        rows.append(parts)
+
+    if not rows:
+        out = _run([smi, "--query-gpu=name,memory.total,driver_version",
+                    "--format=csv,noheader"])
+        for line in out.splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 3:
+                continue
+            if "not a valid field" in line or "Field" in parts[0]:
+                continue
+            rows.append([parts[0], parts[1], "", parts[2]])
+
+    gpus = []
+    for parts in rows:
+        name = parts[0]
+        try:
             vram = int(float(parts[1].split()[0]))
         except Exception:
             vram = 0
-        try:
-            cc = float(parts[2])
-        except Exception:
-            cc = 0.0
+        cc = 0.0
+        if parts[2]:
+            try:
+                cc = float(parts[2])
+            except Exception:
+                cc = 0.0
+        if cc <= 0:
+            cc = compute_by_name(name)     # 老驱动兜底
         gpus.append(
             {
-                "name": parts[0],
+                "name": name,
                 "vram_mb": vram,
                 "compute": cc,
                 "driver": parts[3],
@@ -100,12 +163,19 @@ def nvidia_gpus():
     return gpus
 
 
+
 def wmi_gpu_names():
-    """没装 nvidia-smi 时的兜底：只拿得到名字。"""
-    out = _run([
-        "powershell", "-NoProfile", "-Command",
-        "(Get-CimInstance Win32_VideoController).Name",
-    ])
+    """没有 nvidia-smi 时的兜底：只拿得到名字。
+
+    Windows 走 WMI，Linux 走 lspci。
+    """
+    if os.name == "nt":
+        out = _run([
+            "powershell", "-NoProfile", "-Command",
+            "(Get-CimInstance Win32_VideoController).Name",
+        ])
+    else:
+        out = _run(["sh", "-c", "lspci 2>/dev/null | grep -Ei 'vga|3d|display' | cut -d: -f3-"])
     return [l.strip() for l in out.splitlines() if l.strip()]
 
 
@@ -125,16 +195,29 @@ def find_backends(base_dir):
 
 
 def _cuda_runtime_ok(cuda_cli):
-    """CUDA 版是否需要、且已带上 cudart DLL。"""
+    """CUDA 版能不能真的跑起来。
+
+    Windows：官方包里 cudart / cuBLAS 是分开的 DLL，缺了就静默退回 CPU，
+              所以要看到 cudart64_*.dll 才算齐。
+    Linux：  ggml-cuda.so 会去链系统里的 libcudart（镜像我装好了 CUDA），
+              只要 libggml-cuda.so 在就算可用；再顺手看看有没有 libcudart.so。
+    """
     d = os.path.dirname(cuda_cli)
+    is_win = os.name == "nt"
     try:
-        for name in os.listdir(d):
-            low = name.lower()
-            if low.startswith("cudart") and low.endswith(".dll"):
-                return True
+        names = [n.lower() for n in os.listdir(d)]
     except Exception:
-        pass
-    return False
+        return False
+
+    if is_win:
+        return any(n.startswith("cudart") and n.endswith(".dll") for n in names)
+
+    has_cuda_lib = any("ggml-cuda" in n and (n.endswith(".so") or ".so." in n) for n in names)
+    if not has_cuda_lib:
+        return False
+    # 有系统的 libcudart 或者包内自带都行；没有也先按可用处理，
+    # 真正跑不起来时 --list-devices 会暴露出来。
+    return True
 
 
 def detect(base_dir, extra_dirs=None):
@@ -164,14 +247,20 @@ def detect(base_dir, extra_dirs=None):
 
     tensor_core = any(g.get("tensor_cores") for g in gpus)
     has_gpu = bool(gpus)
+    cuda_ok = "cuda" in backends and _cuda_runtime_ok(backends["cuda"])
 
-    # "自动"的优先顺序：Vulkan > CUDA > HIP > CPU
-    # Vulkan 版自带运行库、NVIDIA/AMD/Intel 都能用，最不容易翻车；
-    # CUDA 版需要额外的 cudart DLL，放不平就会静默退回 CPU，所以排在后面。
-    if "vulkan" in backends and has_gpu:
-        recommended = "vulkan"
-    elif "cuda" in backends and any(g.get("compute") for g in gpus):
+    # "自动"的优先顺序：
+    #   · 显卡有张量核心（>= 7.0）且 CUDA 版可用 → CUDA，这是唯一能用上 Tensor Core 的路径
+    #   · 否则 Vulkan（自带运行库、NVIDIA/AMD/Intel 都能用，最不容易翻车）
+    #   · 再否则 CUDA / HIP / CPU
+    if tensor_core and cuda_ok:
         recommended = "cuda"
+    elif "vulkan" in backends and has_gpu:
+        recommended = "vulkan"
+    elif cuda_ok:
+        recommended = "cuda"
+    elif "cuda" in backends and not cuda_ok:
+        recommended = "cpu"
     elif "hip" in backends and has_gpu:
         recommended = "hip"
     else:
@@ -190,15 +279,18 @@ def detect(base_dir, extra_dirs=None):
             notes.append("%s（驱动信息读不到，按常规显卡处理）" % g["name"])
     if has_gpu and "cuda" not in backends and "vulkan" not in backends:
         notes.append("有显卡，但程序目录里没有 GPU 版 llama.cpp（llama-cuda\\ 或 llama-vulkan\\），暂时只能用 CPU。")
-    if "cuda" in backends and not _cuda_runtime_ok(backends["cuda"]):
-        notes.append("CUDA 版缺少 cudart 运行库，启动后会退回 CPU；先用 Vulkan 或补上 cudart DLL。")
+    if "cuda" in backends and not cuda_ok:
+        notes.append("CUDA 版缺少 cudart / cuBLAS 运行库，启动后会退回 CPU；先用 Vulkan 或补上 DLL。")
     if tensor_core and "cuda" not in backends:
-        notes.append("显卡支持张量核心，但需要 CUDA 版 llama.cpp 才能用上。")
+        notes.append("显卡支持张量核心，但这台机器上没有 llama-cuda\\，只有 CUDA 后端才能用上。")
+    elif tensor_core and not cuda_ok:
+        notes.append("显卡支持张量核心，但 llama-cuda\\ 缺运行库，装上 cudart / cuBLAS 后才能启用。")
 
     return {
         "backends": backends,
         "gpus": gpus,
         "tensor_core": tensor_core,
+        "cuda_ready": cuda_ok,
         "recommended": recommended,
         "notes": notes,
     }

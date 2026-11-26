@@ -51,6 +51,20 @@ def build_parser():
     p.add_argument(
         "--timeout", type=int, default=180, help="模型加载超时秒数，默认 180"
     )
+    p.add_argument(
+        "--backend",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "vulkan", "hip"],
+        help="推理后端：auto（默认，按检测结果挑）/ cpu / cuda / vulkan / hip",
+    )
+    p.add_argument(
+        "--gpu-layers",
+        type=int,
+        default=-1,
+        help="卸载到显卡的层数：-1 全部（默认）、0 纯 CPU、N 表示显卡 + CPU 混合",
+    )
+    p.add_argument("--tensor-core", action="store_true", help="启用张量核心内核（需要 CUDA 后端）")
+    p.add_argument("--flash-attn", action="store_true", help="启用 FlashAttention")
     p.add_argument("--list", action="store_true", help="列出找到的模型和 llama-cli")
     p.add_argument("-v", "--version", action="version", version="%(prog)s " + __version__)
     return p
@@ -60,31 +74,49 @@ def main(argv=None):
     parser = build_parser()
     opts = parser.parse_args(argv)
 
+    from . import devices
+
+    hw = devices.detect(base_dir())
+    backend = (opts.backend or "auto").lower()
+    if backend == "auto":
+        backend = hw.get("recommended") or "cpu"
+
     if opts.list:
         print("程序目录：" + base_dir())
-        cli = find_llama_cli(opts.cli)
-        print("llama-cli：" + (cli if cli else "（没找到）"))
+        print("显卡：" + ("、".join(
+            "%s（%s MB，计算能力 %.1f）" % (g["name"], g.get("vram_mb") or "?", g.get("compute") or 0)
+            for g in hw.get("gpus") or []
+        ) or "未检测到"))
+        print("可用后端：" + ("、".join(hw.get("backends") or {}) or "无"))
+        print("张量核心：" + ("支持" if hw.get("tensor_core") else "不支持"))
+        for name, path in (hw.get("backends") or {}).items():
+            mark = " *" if name == backend else ""
+            print("  %-7s %s%s" % (name, path, mark))
+        cli = find_llama_cli(opts.cli, backend=backend)
+        print("将使用：" + (cli if cli else "（没找到 llama-cli）"))
         models = find_all_models()
         if models:
             print("模型：")
             for m in models:
-                print("  %6.0f MB  %s" % (os.path.getsize(m) / 1048576, m))
+                print("  %6.0f MB  %s" % (os.path.getsize(m["path"]) / 1048576, m["path"]))
         else:
             print("模型：（没找到 .gguf）")
         return 0
 
     # 定位资源
-    cli = find_llama_cli(opts.cli)
+    cli = find_llama_cli(opts.cli, backend=backend)
     if not cli:
         return _fail(
             "找不到 llama-cli 主程序。",
             [
-                "应该放在程序目录下的 llama\\ 里，例如：",
-                "  " + os.path.join(base_dir(), "llama", "llama-cli.exe"),
+                "应该放在程序目录下：",
+                "  " + os.path.join(base_dir(), "llama", "llama-cli"),
+                "  " + os.path.join(base_dir(), "llama-cuda", "llama-cli"),
                 "",
                 "也可以用 --cli 手动指定路径。",
             ],
         )
+    opts.backend = backend
 
     model = find_model(opts.model)
     if not model:
