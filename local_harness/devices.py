@@ -253,14 +253,12 @@ def detect(base_dir, extra_dirs=None):
     #   · 显卡有张量核心（>= 7.0）且 CUDA 版可用 → CUDA，这是唯一能用上 Tensor Core 的路径
     #   · 否则 Vulkan（自带运行库、NVIDIA/AMD/Intel 都能用，最不容易翻车）
     #   · 再否则 CUDA / HIP / CPU
-    if tensor_core and cuda_ok:
+    if tensor_core and cuda_ok and has_gpu:
         recommended = "cuda"
     elif "vulkan" in backends and has_gpu:
         recommended = "vulkan"
-    elif cuda_ok:
+    elif cuda_ok and has_gpu:
         recommended = "cuda"
-    elif "cuda" in backends and not cuda_ok:
-        recommended = "cpu"
     elif "hip" in backends and has_gpu:
         recommended = "hip"
     else:
