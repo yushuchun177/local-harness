@@ -22,7 +22,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 NAME = "local-harness-%s" % VERSION
 
 BUILT = os.path.join(ROOT, "distgui", "local-harness")

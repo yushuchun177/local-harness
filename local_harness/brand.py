@@ -11,7 +11,7 @@
 
 APP_NAME = "local-harness"
 APP_EN = "local-harness"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 BUILD = "2026.11"
 TAGLINE = "完全离线的本地大模型对话"
 SUBTITLE = "模型、对话、数据都留在这台电脑里"
