@@ -12,4 +12,4 @@
 llama.cpp 主程序作为子进程运行，全部交互走标准输入输出。
 """
 
-__version__ = "2.0.0"
+from .brand import VERSION as __version__  # noqa: F401

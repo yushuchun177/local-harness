@@ -18,6 +18,7 @@ sudo apt update && sudo apt install -y python3 python3-pip   # Debian/Ubuntu
 ```
 local-harness/
 ├── run.sh
+├── setup.sh               ← 云 GPU 上一键装：拉 llama.cpp CUDA 版 + 小模型
 ├── local_harness/          ← 源码（或 pip 安装后的包）
 ├── llama/                  ← CPU 后端：llama-cli（Linux 版，没有 .exe）
 ├── llama-cuda/             ← NVIDIA 后端：llama-cli + libggml-cuda.so
@@ -25,20 +26,41 @@ local-harness/
 └── model/                  ← 你的 .gguf
 ```
 
-llama.cpp 的 Linux 包从这里下（以 b12728 为例）：
+最快的路子是直接用发布页里的 `local-harness-1.3.0-linux-x64.tar.gz`，
+里面已经把 `llama/`（CPU）和 `llama-cuda/`（CUDA 12.8）都放好了：
+
+```bash
+tar xzf local-harness-1.3.0-linux-x64.tar.gz
+cd local-harness-1.3.0-linux-x64
+./run.sh --list
+```
+
+自己装 llama.cpp 也行（以 b12728 为例）：
 
 ```bash
 # CPU
-wget https://github.com/ggml-org/llama.cpp/releases/download/b12728/llama-b12728-bin-ubuntu-x64.zip
-# CUDA 12（需要系统已装 CUDA 运行时；AutoDL 等 GPU 镜像一般自带）
-wget https://github.com/ggml-org/llama.cpp/releases/download/b12728/llama-b12728-bin-ubuntu-cuda-x64.zip
+wget https://github.com/ggml-org/llama.cpp/releases/download/b12728/llama-b12728-bin-ubuntu-x64.tar.gz
+# CUDA 12.8（需要系统里有 libcudart.so.12；没有的话见下面"CUDA 运行时"）
+wget https://github.com/ggml-org/llama.cpp/releases/download/b12728/llama-b12728-bin-ubuntu-cuda-12.8-x64.tar.gz
 ```
 
-解压后把整个目录改名成 `llama/` 或 `llama-cuda/` 放进程序目录，确认 `llama-cli` 有执行权限：
+解压后把目录改名成 `llama/` 或 `llama-cuda/` 放进程序目录，确认 `llama-cli` 有执行权限：
 
 ```bash
 chmod +x llama*/llama-cli
 ```
+
+### CUDA 运行时
+
+llama.cpp 的 Linux CUDA 包**不带** `libcudart.so.12` / `libcublas.so.12`，要系统里有。
+没有的话最省事的办法是 pip 装（不用装整套 CUDA Toolkit）：
+
+```bash
+pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12
+```
+
+`run.sh` 会自动把 pip 里这两个库的路径加进 `LD_LIBRARY_PATH`；
+`setup.sh` 检测到缺库时也会自动帮你装。
 
 ## 三、跑起来
 
