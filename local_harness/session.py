@@ -23,7 +23,9 @@ from .engine import LlamaChat, LlamaError, clean_text
 class ChatSession:
     """一次 llama-cli 进程 + 它承载的对话。"""
 
-    def __init__(self, cli, model, ctx, temp, max_tokens, threads, system, reasoning=False):
+    def __init__(self, cli, model, ctx, temp, max_tokens, threads, system,
+                 reasoning=False, gpu_layers=0, flash_attn=False, tensor_core=False,
+                 tensor_split=None):
         self.cli = cli
         self.model = model
         self.ctx = ctx
@@ -32,6 +34,10 @@ class ChatSession:
         self.threads = threads
         self.system = system
         self.reasoning = reasoning
+        self.gpu_layers = gpu_layers
+        self.flash_attn = flash_attn
+        self.tensor_core = tensor_core
+        self.tensor_split = tensor_split
         self.chat = None
         self._lock = threading.RLock()
         self._tmp_files = []
@@ -48,6 +54,10 @@ class ChatSession:
             threads=self.threads or None,
             reasoning=self.reasoning,
             system_prompt=self.system or None,
+            gpu_layers=self.gpu_layers,
+            flash_attn=self.flash_attn,
+            tensor_core=self.tensor_core,
+            tensor_split=self.tensor_split,
         )
         self.chat.start(timeout=timeout)
 

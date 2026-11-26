@@ -25,7 +25,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
-from . import gguf
+from . import devices, gguf
 from .assets import base_dir, find_all_models, find_llama_cli
 from .brand import (
     APP_NAME,
@@ -1045,12 +1045,33 @@ class App:
         labels = [m["label"] for m in self.models]
         self.model_box["values"] = labels
         idx = 0
-        if saved and saved in paths:
-            idx = paths.index(saved)
+        want = self._abs_model(saved)
+        if want and want in paths:
+            idx = paths.index(want)
         self.model_box.current(idx)
         self._current_model = paths[idx]
 
         self._start_session(then=self._restore_last_chat)
+
+    def _abs_model(self, saved):
+        """配置里的模型路径：允许相对程序目录（绿色版换位置也不会失效）。"""
+        if not saved:
+            return ""
+        if os.path.isabs(saved):
+            return os.path.abspath(saved)
+        return os.path.abspath(os.path.join(self.base, saved))
+
+    def _store_model_path(self, path):
+        """程序目录内的模型存相对路径，目录外的存绝对路径。"""
+        if self._is_bundled_model(path):
+            return ""
+        try:
+            rel = os.path.relpath(path, self.base)
+            if not rel.startswith(".."):
+                return rel
+        except Exception:
+            pass
+        return path
 
     def _rescan_and_boot(self):
         """重新扫描 llama.cpp 和模型，再走一遍启动流程。"""
@@ -1085,8 +1106,8 @@ class App:
         if path == getattr(self, "_current_model", None):
             return
         self._current_model = path
-        # 单文件版内置的模型在临时解包目录里，路径每次都变，别存进配置
-        self.cfg.set("model", "" if self._is_bundled_model(path) else path)
+        # 程序目录内的模型存相对路径；单文件版内置模型在临时目录，不存
+        self.cfg.set("model", self._store_model_path(path))
         self._start_session()
 
     def _is_bundled_model(self, path):
@@ -1176,6 +1197,47 @@ class App:
             self.cfg.set("model_dirs", dirs)
         self._reload_models()
 
+    # ============================================================ 加速后端
+    def _detect_hw(self):
+        try:
+            self.hw = devices.detect(self.base)
+        except Exception:
+            self.hw = {"backends": {}, "gpus": [], "tensor_core": False,
+                       "recommended": "cpu", "notes": []}
+        return self.hw
+
+    def _effective_backend(self):
+        """配置里选的后端；auto 就按检测结果挑，缺文件时退回 CPU。"""
+        want = (self.cfg.get("backend") or "auto").strip().lower()
+        backends = (getattr(self, "hw", None) or self._detect_hw()).get("backends") or {}
+        if want == "auto" or want not in backends:
+            want = (getattr(self, "hw", None) or {}).get("recommended") or "cpu"
+        if want not in backends:
+            want = "cpu" if "cpu" in backends else next(iter(backends), "cpu")
+        return want, backends.get(want)
+
+    def _effective_layers(self, backend):
+        """真正传给 llama.cpp 的 -ngl 值：CPU 后端恒为 0。"""
+        if backend == "cpu":
+            return 0
+        try:
+            return int(self.cfg.get("gpu_layers"))
+        except Exception:
+            return -1
+
+    def _accel_text(self):
+        """状态栏用的一句话：CUDA · 全部层 / CUDA · 12 层 / CPU。"""
+        backend, _cli = self._effective_backend()
+        if backend == "cpu":
+            return "CPU"
+        ngl = self._effective_layers(backend)
+        name = {"cuda": "CUDA", "vulkan": "Vulkan", "hip": "HIP"}.get(backend, backend)
+        if ngl < 0:
+            return "%s · 全部层" % name
+        if ngl == 0:
+            return name
+        return "%s · %d 层 + CPU" % (name, ngl)
+
     # ============================================================ 会话
     def _start_session(self, then=None):
         """（重新）启动 llama-cli 进程。"""
@@ -1194,8 +1256,16 @@ class App:
         if self.session:
             self.session.stop()
 
+        backend, cli = self._effective_backend()
+        ngl = self._effective_layers(backend)
+        self._active_backend = backend
+        if not cli:
+            cli = self.llama_cli
+            self._active_backend = "cpu"
+            ngl = 0
+
         self.session = ChatSession(
-            cli=self.llama_cli,
+            cli=cli,
             model=self._current_model,
             ctx=ctx,
             temp=float(self.cfg.get("temp")),
@@ -1203,12 +1273,18 @@ class App:
             threads=int(self.cfg.get("threads") or 0),
             system=self.cfg.get("system"),
             reasoning=bool(self.cfg.get("reasoning")),
+            gpu_layers=ngl,
+            flash_attn=bool(self.cfg.get("flash_attn")) and backend != "cpu",
+            tensor_core=bool(self.cfg.get("tensor_core")),
+            tensor_split=self.cfg.get("tensor_split") or None,
         )
 
         self._set_status("正在加载模型…")
         label = gguf.model_label(self._current_model)
         if not (self.current_chat and self.current_chat.get("messages")):
-            self._show_loading_card("%s · 上下文 %d" % (label, ctx))
+            self._show_loading_card(
+                "%s · 上下文 %d · %s" % (label, ctx, self._accel_text())
+            )
 
         def work():
             try:
@@ -1325,7 +1401,7 @@ class App:
         label = gguf.model_label(self._current_model)
         ctx = int(self.cfg.get("ctx"))
         native_txt = (" 原生 %d" % n) if n else ""
-        self._set_status("%s · 上下文 %d%s" % (label, ctx, native_txt))
+        self._set_status("%s · %s · 上下文 %d%s" % (label, self._accel_text(), ctx, native_txt))
         # token 占用走右侧独立标签
         if self.current_chat:
             self._update_token_count(self.current_chat)
@@ -2283,8 +2359,9 @@ class SettingsDialog(tk.Toplevel):
 
         self.title("设置")
         self.configure(bg=t["bg"])
-        self.geometry("620x680")
-        self.resizable(False, False)
+        self.geometry("640x720")
+        self.minsize(600, 420)
+        self.resizable(True, True)
         self.transient(app.root)
         self.grab_set()
 
@@ -2454,6 +2531,112 @@ class SettingsDialog(tk.Toplevel):
             bg=t["bg"],
         ).pack(side="left")
 
+        # ---- 加速（显卡）----
+        sep3 = tk.Frame(self, bg=t["line"], height=1)
+        sep3.pack(fill="x", padx=pad, pady=(16, 10))
+        tk.Label(
+            self, text="加速（显卡）", font=FONT_TITLE, fg=t["fg"], bg=t["bg"]
+        ).pack(anchor="w", padx=pad)
+
+        hw = app._detect_hw()
+        backends = hw.get("backends") or {}
+        gpus = hw.get("gpus") or []
+
+        # 检测结果
+        ho = tk.Frame(self, bg=t["bg_input"])
+        ho.pack(fill="x", padx=pad, pady=(6, 0))
+        gpu_txt = "、".join(
+            "%s（%s MB，计算能力 %.1f）" % (
+                g["name"], g.get("vram_mb") or "?", g.get("compute") or 0
+            )
+            for g in gpus
+        ) or "未检测到独立显卡"
+        avail = "、".join(
+            {"cpu": "CPU", "cuda": "CUDA", "vulkan": "Vulkan", "hip": "HIP"}.get(k, k)
+            for k in backends
+        ) or "无"
+        info_lines = [
+            "显卡：" + gpu_txt,
+            "可用后端：" + avail,
+            "张量核心：" + ("支持（计算能力 ≥ 7.0）" if hw.get("tensor_core") else "不支持"),
+        ]
+        for ln in info_lines:
+            tk.Label(
+                ho, text=ln, font=FONT_UI_S, fg=t["fg_dim"], bg=t["bg_input"],
+                anchor="w",
+            ).pack(fill="x", padx=10, pady=1)
+
+        # 后端选择
+        brow = tk.Frame(self, bg=t["bg"])
+        brow.pack(fill="x", padx=pad, pady=(10, 0))
+        tk.Label(
+            brow, text="加速方式", font=FONT_UI, fg=t["fg"], bg=t["bg"]
+        ).pack(side="left")
+
+        self.backend_var = tk.StringVar()
+        cur_backend = (app.cfg.get("backend") or "auto").lower()
+        choices = [("auto", "自动（推荐：%s）" % devices.BACKEND_LABELS.get(hw.get("recommended") or "cpu", "CPU"))]
+        for key in ("cpu", "cuda", "vulkan", "hip"):
+            if key in backends:
+                choices.append((key, devices.BACKEND_LABELS[key]))
+        if cur_backend not in [c[0] for c in choices]:
+            cur_backend = "auto"
+        self._backend_choices = choices
+        labels = [c[1] for c in choices]
+        self.backend_box = ttk.Combobox(
+            brow, values=labels, state="readonly", width=26, font=FONT_UI_S
+        )
+        self.backend_box.current([c[0] for c in choices].index(cur_backend))
+        self.backend_box.pack(side="left", padx=(8, 0))
+        self.backend_box.bind("<<ComboboxSelected>>", lambda e: self._sync_accel_state())
+
+        # GPU 层数（组合使用：部分层在显卡、剩下的在 CPU）
+        lrow = tk.Frame(self, bg=t["bg"])
+        lrow.pack(fill="x", padx=pad, pady=(8, 0))
+        tk.Label(
+            lrow, text="GPU 层数", font=FONT_UI, fg=t["fg"], bg=t["bg"]
+        ).pack(side="left")
+        try:
+            cur_layers = int(app.cfg.get("gpu_layers"))
+        except Exception:
+            cur_layers = -1
+        self.layers_var = tk.StringVar(value=self._layers_label(cur_layers))
+        self._layer_values = [(-1, "全部层（全都在显卡上）"), (0, "0 层（纯 CPU）")]
+        for n in (4, 8, 12, 16, 20, 24, 32):
+            self._layer_values.append((n, "%d 层（显卡 + CPU 混合）" % n))
+        self.layers_box = ttk.Combobox(
+            lrow, values=[v[1] for v in self._layer_values],
+            state="readonly", width=26, font=FONT_UI_S,
+        )
+        idx = next((i for i, v in enumerate(self._layer_values) if v[0] == cur_layers), 0)
+        self.layers_box.current(idx)
+        self.layers_box.pack(side="left", padx=(8, 0))
+
+        # 张量核心 / FlashAttention
+        orow = tk.Frame(self, bg=t["bg"])
+        orow.pack(fill="x", padx=pad, pady=(8, 0))
+        self.tc_var = tk.BooleanVar(value=bool(app.cfg.get("tensor_core")))
+        self.tc_box = tk.Checkbutton(
+            orow, text="张量核心加速", variable=self.tc_var,
+            font=FONT_UI_S, fg=t["fg"], bg=t["bg"], activebackground=t["bg"],
+            selectcolor=t["bg_input"], bd=0, highlightthickness=0,
+        )
+        self.tc_box.pack(side="left")
+        self.fa_var = tk.BooleanVar(value=bool(app.cfg.get("flash_attn")))
+        self.fa_box = tk.Checkbutton(
+            orow, text="FlashAttention", variable=self.fa_var,
+            font=FONT_UI_S, fg=t["fg"], bg=t["bg"], activebackground=t["bg"],
+            selectcolor=t["bg_input"], bd=0, highlightthickness=0,
+        )
+        self.fa_box.pack(side="left", padx=(18, 0))
+
+        self.accel_hint = tk.Label(
+            self, text="", font=FONT_UI_S, fg=t["fg_faint"], bg=t["bg"],
+            anchor="w", justify="left", wraplength=540,
+        )
+        self.accel_hint.pack(fill="x", padx=pad, pady=(4, 0))
+        self._sync_accel_state()
+
         # ---- 已导入的模型文件夹 ----
         dirs = app.cfg.get("model_dirs") or []
         if dirs:
@@ -2501,6 +2684,21 @@ class SettingsDialog(tk.Toplevel):
             btns, text="保存", width=8, style="Accent.TButton", command=self.save
         ).pack(side="right", padx=(0, 8))
 
+        # 内容高度会随"加速"一节的检测结果变化，按实际需要定窗口大小，
+        # 屏幕放不下时自动缩小，避免底部的保存按钮被切掉。
+        self.update_idletasks()
+        need = self.winfo_reqheight()
+        maxh = self.winfo_screenheight() - 120
+        if need > maxh:
+            try:
+                self.sys_text.configure(height=3)
+                self.update_idletasks()
+                need = self.winfo_reqheight()
+            except Exception:
+                pass
+        self.geometry("640x%d" % min(need, maxh))
+        self.resizable(True, True)
+
     def _rm_dir(self, folder):
         """移除一个导入的模型文件夹，并原地刷新列表。"""
         app = self.app
@@ -2533,16 +2731,37 @@ class SettingsDialog(tk.Toplevel):
             app.cfg.set("compress_keep", int(self.keep_var.get()), save=False)
         except ValueError:
             pass
+
+        # 加速设置
+        old_backend = app.cfg.get("backend")
+        old_layers = app.cfg.get("gpu_layers")
+        old_tc = app.cfg.get("tensor_core")
+        old_fa = app.cfg.get("flash_attn")
+        new_backend = self._accel_choice()
+        new_layers = self._layer_values[self.layers_box.current()][0]
+        new_tc = bool(self.tc_var.get()) and str(self.tc_box.cget("state")) != "disabled"
+        new_fa = bool(self.fa_var.get()) and str(self.fa_box.cget("state")) != "disabled"
+        app.cfg.set("backend", new_backend, save=False)
+        app.cfg.set("gpu_layers", new_layers, save=False)
+        app.cfg.set("tensor_core", new_tc, save=False)
+        app.cfg.set("flash_attn", new_fa, save=False)
+
         app.cfg.save()
 
         # 压缩器参数变了就重建
         app._compressor_key = None
 
+        accel_changed = (
+            new_backend != old_backend
+            or new_layers != old_layers
+            or new_tc != old_tc
+            or new_fa != old_fa
+        )
+
         self.destroy()
 
-        changed = (text != old_sys) or (threads != (app.cfg.get("threads") or 0))
-        if text != old_sys:
-            # 系统提示词影响启动参数，必须重启模型
+        if text != old_sys or accel_changed:
+            # 系统提示词、加速方式都影响启动参数，必须重启模型
             if app.session:
                 app.session.system = text
                 app.session.threads = threads
@@ -2551,3 +2770,68 @@ class SettingsDialog(tk.Toplevel):
             )
         elif app.session:
             app.session.threads = threads
+
+    # ------------------------------------------------------------ 加速
+    def _layers_label(self, ngl):
+        for v, label in getattr(self, "_layer_values", []):
+            if v == ngl:
+                return label
+        return "%d 层" % ngl
+
+    def _accel_choice(self):
+        try:
+            return self._backend_choices[self.backend_box.current()][0]
+        except Exception:
+            return "auto"
+
+    def _sync_accel_state(self):
+        """选了 CPU 或 0 层就把显卡相关的勾选框置灰，并说明原因。"""
+        if not hasattr(self, "accel_hint"):
+            return
+        t = self.t
+        backend = self._accel_choice()
+        layers = self._layer_values[self.layers_box.current()][0]
+        hw = self.app._detect_hw()
+
+        if backend == "auto":
+            backend = (hw.get("recommended") or "cpu")
+
+        gpu_on = backend != "cpu" and layers != 0
+
+        def enable(widget, on, tip):
+            widget.configure(
+                state="normal" if on else "disabled",
+                fg=t["fg"] if on else t["fg_faint"],
+            )
+
+        tc_ok = gpu_on and bool(hw.get("tensor_core"))
+        fa_ok = gpu_on
+        if not tc_ok:
+            self.tc_var.set(False)
+        enable(self.tc_box, tc_ok, "张量核心")
+        enable(self.fa_box, fa_ok, "FlashAttention")
+
+        if backend == "cpu":
+            hint = "纯 CPU 推理：不使用显卡。需要 GPU 加速时，在程序目录放一份 llama-cuda\\ 或 llama-vulkan\\ 再选对应方式。"
+        elif layers == 0:
+            hint = "GPU 层数为 0，实际仍是纯 CPU。要启用显卡，把层数改成「全部层」或具体层数即可（显卡 + CPU 混合）。"
+        else:
+            if layers < 0:
+                parts = ["全部层都放在显卡上。"]
+            else:
+                parts = ["%d 层放在显卡、其余层留在 CPU（这就是组合使用）。" % layers]
+            if tc_ok:
+                parts.append("张量核心：已启用（MMQ 量化内核 + fp16 矩阵乘）。")
+            elif not hw.get("tensor_core"):
+                cc = 0.0
+                for g in hw.get("gpus") or []:
+                    cc = max(cc, float(g.get("compute") or 0))
+                parts.append(
+                    "张量核心：该显卡不支持（计算能力 %.1f < 7.0），仍可用 CUDA/Vulkan 常规内核加速。"
+                    % cc
+                )
+            else:
+                parts.append("张量核心：需要 CUDA 后端才生效。")
+            hint = "".join(parts)
+
+        self.accel_hint.configure(text=hint)

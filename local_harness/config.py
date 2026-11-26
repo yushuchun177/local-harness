@@ -33,6 +33,11 @@ DEFAULTS = {
     "compress_threshold": 2048,   # 达到这个 token 数就压缩
     "compress_step": 1024,        # 阈值滑块的刻度
     "compress_keep": 4,           # 最近保留几轮原话
+    # 加速：后端与显卡
+    "backend": "auto",       # auto / cpu / cuda / vulkan / hip
+    "gpu_layers": -1,        # -1 全部层, 0 纯 CPU, 其它 = 卸载层数（CPU+GPU 混合）
+    "tensor_core": True,     # 显卡支持时启用张量核心内核
+    "flash_attn": True,      # CUDA/Vulkan 下启用 FlashAttention
 }
 
 

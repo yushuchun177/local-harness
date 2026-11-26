@@ -259,6 +259,10 @@ class LlamaChat:
         reasoning=False,
         system_prompt=None,
         extra_args=None,
+        gpu_layers=0,
+        flash_attn=False,
+        tensor_core=False,
+        tensor_split=None,
     ):
         self.cli_path = cli_path
         self.model_path = model_path
@@ -269,6 +273,11 @@ class LlamaChat:
         self.reasoning = reasoning
         self.system_prompt = system_prompt
         self.extra_args = list(extra_args or [])
+        # 卸载到显卡的层数：0 = 纯 CPU，-1 = 全部层，其它为具体层数（CPU+GPU 混合）
+        self.gpu_layers = gpu_layers
+        self.flash_attn = flash_attn
+        self.tensor_core = tensor_core
+        self.tensor_split = tensor_split
 
         self.proc = None
 
@@ -335,8 +344,37 @@ class LlamaChat:
                 a += [flag, "off"]
         elif want("--reasoning"):
             a += ["--reasoning", "on"]
+
+        # ---- 显卡加速 ----
+        ngl = int(self.gpu_layers or 0)
+        flag = want("-ngl", "--n-gpu-layers", "-gpu-layers")
+        if flag:
+            # 必须显式给 0：新版本 llama-cli 默认 -ngl 99，
+            # 不传就等于"全部层上显卡"，选"纯 CPU"时会失效。
+            a += [flag, str(0 if ngl == 0 else (999 if ngl < 0 else ngl))]
+        ts = self.tensor_split
+        if ts and ngl:
+            flag = want("-ts", "--tensor-split")
+            if flag:
+                a += [flag, ts]
+        if self.flash_attn:
+            flag = want("-fa", "--flash-attn")
+            if flag:
+                a += [flag, "on"]
+
         a += self.extra_args
         return a
+
+    def env(self):
+        """子进程环境变量：张量核心 / CUDA 相关开关从这里下发。"""
+        e = dict(os.environ)
+        if self.tensor_core and self.gpu_layers:
+            # llama.cpp 没有独立的"张量核心开关"：
+            # 强制走 MMQ 量化内核（mma 指令）并配合 FlashAttention 的 fp16 矩阵乘，
+            # 在计算能力 >= 7.0 的卡上就会用到 Tensor Core。
+            e["GGML_CUDA_FORCE_MMQ"] = "1"
+            e["GGML_CUBLAS_FORCE_F16"] = "1"
+        return e
 
     # ------------------------------------------------------------ 生命周期
     def start(self, timeout=180):
@@ -353,6 +391,7 @@ class LlamaChat:
                 bufsize=0,
                 cwd=os.path.dirname(self.cli_path) or None,
                 creationflags=flags,
+                env=self.env(),
             )
         except FileNotFoundError:
             raise LlamaError("找不到 llama-cli 主程序：\n" + self.cli_path)

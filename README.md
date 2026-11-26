@@ -38,6 +38,13 @@ Local-Harness 是 llama.cpp 的桌面端外壳：负责调起 `llama-cli`、读�
 - 温度、上下文窗口、回复上限均可在界面直接调节（输入数值或拖动滑块），修改即时生效
 - 深色 / 浅色主题切换；参数与会话随程序目录保存，绿色免安装
 
+**加速**
+
+- 三种后端自由切换：CPU / CUDA / Vulkan，自动检测显卡与可用后端
+- GPU 层数可调：整模型上显卡，或只放一部分（显卡 + CPU 组合使用，适合小显存）
+- 张量核心（Tensor Core）检测与启用：计算能力 ≥ 7.0 的 NVIDIA 卡通过 MMQ 内核 + fp16 矩阵乘用上
+- FlashAttention 开关；状态栏实时显示当前生效的加速方式
+
 ## 使用须知
 
 **1. 必须自行准备模型（本程序不包含任何模型）**
@@ -56,18 +63,44 @@ Local-Harness 是 llama.cpp 的桌面端外壳：负责调起 `llama-cli`、读�
 **3. 运行环境与目录**
 
 - Windows 10 / 11，64 位（x64 CPU，需支持 SSE4.2）
-- 纯 CPU 推理，不要求独立显卡；内存建议：0.4B–1B 模型 4GB 起，1.5B–2B 8GB，3B–4B 16GB
+- 显卡可选：有 NVIDIA 显卡可用 CUDA，有任意显卡可用 Vulkan；没有也能纯 CPU 跑
+- 内存建议：0.4B–1B 模型 4GB 起，1.5B–2B 8GB，3B–4B 16GB
 
 ```
 local-harness.exe      主程序
 _internal\             运行库（勿删改）
-llama\                 llama.cpp 运行文件（llama-cli.exe 及依赖 DLL）
+llama\                 CPU 后端（llama-cli.exe 及依赖 DLL）
+llama-cuda\            CUDA 后端（NVIDIA，需 cudart/cublas DLL）
+llama-vulkan\          Vulkan 后端（通用显卡）
 model\                 自备的 .gguf 模型
 chats\                 对话记录（自动生成）
 config.json            界面与参数设置（自动生成）
 ```
 
-**4. 其它说明**
+**4. 显卡加速（可自由切换）**
+
+设置 → 加速（显卡）里可以选：
+
+| 选项 | 说明 |
+| --- | --- |
+| 加速方式 | 自动 / 纯 CPU / CUDA / Vulkan；「自动」优先 Vulkan（自带运行库、兼容性最好），其次 CUDA |
+| GPU 层数 | 全部层 = 整模型上显卡；0 层 = 纯 CPU；中间值 = 显卡 + CPU 组合使用 |
+| 张量核心 | 显卡计算能力 ≥ 7.0（RTX 20 系及以后）时可用，走 CUDA 的 MMQ 内核 + fp16 矩阵乘；不支持的卡自动置灰并说明原因 |
+| FlashAttention | CUDA / Vulkan 下的长上下文加速，建议开启 |
+
+界面会检测并显示显卡型号、显存、计算能力、可用后端以及是否支持张量核心；状态栏显示当前实际生效的方式，例如 `Qwen3 1.7B · Q8_0 · Vulkan · 全部层 · 上下文 8192`。
+
+本机实测（GTX 1050 Ti 4GB，计算能力 6.1，无张量核心），Qwen3-1.7B：
+
+| 方式 | 生成速度 |
+| --- | --- |
+| CPU | 13.7 字/秒 |
+| CUDA（全部层） | 48.6 字/秒 |
+| Vulkan（全部层） | 59.0 字/秒 |
+
+显存不足时用「12 层 + CPU」这类组合，避免加载失败。
+
+**5. 其它说明**
 
 - 程序目录可整体拷贝到其它电脑或 U 盘使用，`model\` 一并带走即可
 - 删除 `chats\` 中的文件即删除对应会话；删除 `config.json` 恢复默认设置
