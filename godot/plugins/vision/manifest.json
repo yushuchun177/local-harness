@@ -1,0 +1,73 @@
+{
+  "id": "vision",
+  "name": "识图",
+  "name_en": "Vision / OCR",
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "description": "看图：读取图片信息、用系统 OCR 提取文字；如果配了视觉模型（GGUF + mmproj）就直接描述画面。",
+  "description_en": "Image understanding: read image info, extract text with system OCR, or describe the picture when a vision GGUF + mmproj is configured.",
+  "author": "yushuchun177",
+  "homepage": "https://github.com/yushuchun177/localharness-plugin-vision",
+  "min_app": "0.1.0",
+  "requires": {
+    "os": "Windows 10+",
+    "deps": [
+      "PowerShell",
+      "系统 OCR 语言包"
+    ],
+    "disk": "< 1 MB",
+    "memory": "约 15 MB（视觉模型另算）",
+    "network": false
+  },
+  "settings": [
+    {
+      "key": "ocr_lang",
+      "label": "OCR 语言",
+      "type": "string",
+      "default": "zh-Hans",
+      "help": "简体中文 zh-Hans，英文 en-US",
+      "placeholder": "zh-Hans / en-US"
+    }
+  ],
+  "tools": [
+    {
+      "name": "vision_info",
+      "description": "读取图片的尺寸、格式、文件大小。",
+      "params": {
+        "image": "string，图片路径"
+      },
+      "level": "read",
+      "needs": [
+        "本地文件"
+      ]
+    },
+    {
+      "name": "vision_ocr",
+      "description": "用 Windows 自带 OCR 识别图片里的文字（离线，支持中英文，取决于系统装了哪些语言包）。",
+      "params": {
+        "image": "string，图片路径",
+        "lang": "string，可选，例如 zh-Hans / en-US；不填用系统默认"
+      },
+      "level": "read",
+      "needs": [
+        "本地文件",
+        "系统 OCR"
+      ],
+      "async": true
+    },
+    {
+      "name": "vision_describe",
+      "description": "描述画面内容：需要视觉模型（设置里填 vision_model 和 vision_mmproj），没配就退回 OCR。",
+      "params": {
+        "image": "string，图片路径",
+        "question": "string，可选，想重点关注什么"
+      },
+      "level": "read",
+      "needs": [
+        "本地文件",
+        "视觉模型"
+      ],
+      "async": true
+    }
+  ]
+}
