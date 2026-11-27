@@ -1,0 +1,52 @@
+﻿; local-harness · Godot 移植版
+; 工程配置：Godot 4.7，Compatibility 渲染（老显卡友好），窗口 1280x820
+
+config_version=5
+
+[application]
+
+config/name="Local-Harness"
+config/description="完全离线的本地大模型对话客户端（Godot 版）"
+run/main_scene="res://ui/main.tscn"
+config/features=PackedStringArray("4.7", "Compatibility")
+config/icon="res://ui/icon.svg"
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.055, 0.063, 0.078, 1)
+
+[autoload]
+
+App="*res://scripts/app.gd"
+Plugins="*res://scripts/plugins.gd"
+PluginStore="*res://scripts/plugin_store.gd"
+I18N="*res://scripts/i18n.gd"
+PluginPrefs="*res://scripts/plugin_prefs.gd"
+PluginUI="*res://scripts/plugin_ui.gd"
+MD="*res://scripts/md.gd"
+MDView="*res://scripts/md_view.gd"
+MathRender="*res://scripts/math_render.gd"
+GGUF="*res://scripts/gguf.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=820
+window/size/window_width_override=1280
+window/size/window_height_override=820
+window/stretch/mode="canvas_items"
+
+[gui]
+
+theme/default_font_multichannel_signed_distance_field=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.055, 0.063, 0.078, 1)
+
+
+
+
+
+
+
