@@ -1,0 +1,54 @@
+{
+  "id": "screenshot",
+  "name": "截图",
+  "name_en": "Screenshot",
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "description": "抓一张全屏截图存成 PNG，返回路径和分辨率（配合识图插件可以看图）。",
+  "description_en": "Capture a full-screen PNG and return its path and resolution (works with the vision plugin to read it).",
+  "author": "yushuchun177",
+  "homepage": "https://github.com/yushuchun177/localharness-plugin-screenshot",
+  "min_app": "0.1.0",
+  "requires": {
+    "os": "Windows 10+",
+    "deps": [
+      "PowerShell",
+      ".NET"
+    ],
+    "disk": "每张约 1–3 MB",
+    "memory": "约 20 MB",
+    "network": false
+  },
+  "settings": [
+    {
+      "key": "dir",
+      "label": "保存目录",
+      "type": "string",
+      "default": "",
+      "help": "留空保存到 user://shots",
+      "placeholder": "D:/shots（留空用默认）"
+    }
+  ],
+  "commands": [
+    {
+      "name": "shot",
+      "description": "截一张全屏图",
+      "usage": "/shot [文件名]"
+    }
+  ],
+  "tools": [
+    {
+      "name": "screenshot_capture",
+      "description": "截取当前整个桌面，保存为 PNG，返回文件路径。",
+      "params": {
+        "name": "string，可选，文件名前缀，默认 shot"
+      },
+      "dangerous": true,
+      "level": "act",
+      "needs": [
+        "屏幕内容"
+      ],
+      "async": true
+    }
+  ]
+}
