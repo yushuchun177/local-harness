@@ -1,182 +1,141 @@
-> **当前版本：2.0.0（Godot 重写版）**
->
-> - 安装包：[Releases → v2.0.0](https://github.com/yushuchun177/local-harness/releases/tag/v2.0.0)（Windows x64，解压双击）
-> - 源码：本仓库 [`godot/`](godot/) 目录
-> - 支持平台：仅 Windows。Linux 版已下架；受资金限制，macOS 与鸿蒙 OS 暂不适配
-> - 仓库根目录的 Python 实现（`main.py`、`local_harness/` 等）为 1.x 旧版，已停止维护
+# Local-Harness
+
+**完全离线的本地大模型聊天客户端，Windows 桌面版。**
+
+模型（GGUF）放在本机，推理由 llama.cpp 完成，对话、记忆、配置都不离开硬盘。
+断网可用，关闭程序即全部结束。
+
+当前版本：**2.0.0**（Godot 4.7 重写版）
 
 ---
 
-# Local-Harness
+## 下载
 
-面向 [llama.cpp](https://github.com/ggml-org/llama.cpp) 的图形化 Harness 调度工具：把模型加载、参数配置和多轮对话收进一个窗口，不用敲终端命令行。
+[**Releases → v2.0.0**](https://github.com/yushuchun177/local-harness/releases/tag/v2.0.0)
 
-> **本项目不捆绑、不附带任何 GGUF 模型权重。**
-> 模型需要自行下载后导入；仓库与发布包中只有程序本体和 llama.cpp 运行文件，没有模型文件。
+| 文件 | 说明 |
+| --- | --- |
+| `LocalHarness-2.0.0-win64.zip` | 解压即用，双击 `LocalHarness.exe` |
+| `LocalHarness-2.0.0-src.zip` | 源码包（不含模型） |
 
-![界面](docs/screenshots/chat-dark.png)
+安装步骤：
 
-## 简介
+1. 解压到任意目录
+2. 把 GGUF 模型放进 `model/`
+3. 双击 `LocalHarness.exe`
+4. 设置 → 插件管理 → 刷新 → 安装需要的插件
 
-Local-Harness 是 llama.cpp 的桌面端外壳：负责调起 `llama-cli`、读取 GGUF 元数据、维护上下文与对话记录、把流式输出呈现为对话界面。目标是降低本地大模型的使用门槛——选模型、调参数、开始对话，都在界面里完成。
+包内自带 CPU 与 Vulkan 两套推理后端。想用 CUDA，把 `llama-cuda` 目录放到 exe 同级即可（CUDA 版约 1.3 GB，未随包附带）。
 
-程序在本机运行，不联网、不需要账号，模型与对话记录都留在本地目录。
+---
 
-## 功能
+## 这一版
 
-**模型**
+### 面向非程序员
 
-- 支持任意 llama.cpp 可加载的 GGUF 模型，兼容 Qwen 系列及 Llama、Mistral、Gemma、Phi、DeepSeek、Yi、GLM、MiniCPM、SmolLM 等
-- 直接读取 GGUF 元数据：模型名称、架构、原生上下文上限；界面中「上下文」滑块的取值上限即模型自身的原生上限
-- 自动识别并过滤非对话模型（mmproj、视觉投影、向量化与重排模型）以及分片文件的多余分片
+能以点选、滑块、按钮解决的地方，不出现参数名。例如「智能压缩上下文」：
+三个数字（消息条数 / 估算占用 / 触发阈值）、一个下拉（不自动 / 50% / 70% / 85%）、
+一个滑块（保留几轮）、一个按钮（现在压缩，结果显示在下方）。
 
-**对话**
+### 输出能读了
 
-- 流式输出，逐字呈现，生成过程中可随时停止
-- 多会话管理：新建、重命名、删除会话，可删除单条消息
-- 支持思考型模型（如 Qwen3）：思考过程不混入回答正文
+真加粗、分级标题、列表、引用、代码块；**表格按表格绘制**（表头底色、隔行背景、单元格边框）；
+**图片内嵌**缩略图，点开用系统看图；**公式**渲染成分式与根号（常见 LaTeX 子集）。
 
-**上下文**
+### 能力来自插件
 
-- 自动上下文摘要压缩：对话达到触发阈值后，在下一轮提问前把较早的历史压缩成摘要，保留最近若干轮原话
-- 触发阈值按 1024 token 一档自由调节：**1024 / 2048 / 3072 / 4096，默认 2048**
-- 可在设置中关闭自动压缩
+主程序只负责对话、启动模型、管理插件。13 个插件各自独立仓库，可在应用内安装、卸载、热加载。
+插件自带界面代码（`ui.gd`），主程序只提供控件积木，因此各插件界面互不相同。
 
-**参数与界面**
+工具权限按粒度控制，分只读 / 会产生操作 / 高危三组；被关闭的工具不会进入模型工具清单，
+模型强行调用也会被拒绝。
 
-- 温度、上下文窗口、回复上限均可在界面直接调节（输入数值或拖动滑块），修改即时生效
-- 深色 / 浅色主题切换；参数与会话随程序目录保存，绿色免安装
+### 中文是默认
 
-**加速**
+命令经 UTF-16 PowerShell 脚本执行（绕开 `cmd` 的 GBK）；网页按声明编码解码；
+搜索在 DuckDuckGo 不可达时切 Bing；OCR 默认简体中文；朗读优先中文音色。
 
-- 三种后端自由切换：CPU / CUDA / Vulkan，自动检测显卡与可用后端
-- GPU 层数可调：整模型上显卡，或只放一部分（显卡 + CPU 组合使用，适合小显存）
-- 张量核心（Tensor Core）检测与启用：计算能力 ≥ 7.0 的 NVIDIA 卡通过 MMQ 内核 + fp16 矩阵乘用上
-- FlashAttention 开关；状态栏实时显示当前生效的加速方式
+### 模型自动适配
 
-**平台**
+读取 GGUF 文件头得到层数、参数量、原生上下文、注意力结构，结合显存与内存算出：
+GPU 层数、上下文长度、线程数，并在内存不足时给出具体所需/可用数字。
+适配结果按模型分别保存，优先级为：本模型覆盖值 > 自动检测 > 全局默认。
 
-- Windows：绿色版 / 单文件版，图形界面
-- Linux / macOS：同一套代码，终端界面（`./run.sh`），同样支持 CUDA / Vulkan 与显卡加速，详见 [docs/LINUX.md](docs/LINUX.md)
+### 稳定性
 
-## 使用须知
+- 启动/重启/退出按端口清理残留 `llama-server`（曾累积 16 个、占用 7.89 GB）
+- 慢操作（命令、截图、OCR、联网）在工作线程执行，界面保持响应
+- 流式输出节流，长回答不随长度变慢
+- 上下文只带最近 24 条、单条上限 4000 字
 
-**1. 必须自行准备模型（本程序不包含任何模型）**
+同机体检：冷启动到模型就绪 8.6 秒，界面就绪 2 毫秒，渲染 60 条消息 175 毫秒。
 
-本项目不提供、不附带、不内置任何 GGUF 模型权重。下载安装包后只有一个空程序，需要自行获取 `.gguf` 模型文件才能对话。
+---
 
-模型权重由各自的发布方授权（例如 Qwen 系列为 Apache-2.0），请遵守相应许可；模型许可与本项目无关，本项目只负责在本机调用。
-
-**2. 导入模型的两种方式**
-
-- 把 `.gguf` 文件放进程序目录下的 `model\` 文件夹，重启程序后出现在顶部模型下拉框中
-- 或点击顶部「导入」，选择一个存放模型的文件夹，程序会记住该路径
-
-模型来源示例：Hugging Face、ModelScope 等平台上的 GGUF 量化版本（文件名以 `.gguf` 结尾）。分片模型只需放入第一片（`xxx-00001-of-00002.gguf`），其余分片放在同一目录即可。
-
-**3. 运行环境与目录**
-
-- Windows 10 / 11，64 位（x64 CPU，需支持 SSE4.2）
-- 显卡可选：有 NVIDIA 显卡可用 CUDA，有任意显卡可用 Vulkan；没有也能纯 CPU 跑
-- 内存建议：0.4B–1B 模型 4GB 起，1.5B–2B 8GB，3B–4B 16GB
+## 仓库结构
 
 ```
-local-harness.exe      主程序
-_internal\             运行库（勿删改）
-llama\                 CPU 后端（llama-cli.exe 及依赖 DLL）
-llama-cuda\            CUDA 后端（NVIDIA，需 cudart/cublas DLL）
-llama-vulkan\          Vulkan 后端（通用显卡）
-model\                 自备的 .gguf 模型
-chats\                 对话记录（自动生成）
-config.json            界面与参数设置（自动生成）
+godot/          2.0 源码（Godot 4.7 工程）
+plugins 仓库    13 个插件，各自独立：
+                github.com/yushuchun177/localharness-plugin-<id>
+索引仓库        github.com/yushuchun177/localharness-plugins
+                （应用从这里读取插件列表）
 ```
 
-**4. 显卡加速（可自由切换）**
+根目录的 `main.py`、`main_gui.py`、`local_harness/` 等为 **1.x 的 Python 实现**，已停止维护。
 
-设置 → 加速（显卡）里可以选：
+## 插件
 
-| 选项 | 说明 |
+| 插件 | 仓库 |
 | --- | --- |
-| 加速方式 | 自动 / 纯 CPU / CUDA / Vulkan；「自动」优先 Vulkan（自带运行库、兼容性最好），其次 CUDA |
-| GPU 层数 | 全部层 = 整模型上显卡；0 层 = 纯 CPU；中间值 = 显卡 + CPU 组合使用 |
-| 张量核心 | 显卡计算能力 ≥ 7.0（RTX 20 系及以后）时可用，走 CUDA 的 MMQ 内核 + fp16 矩阵乘；不支持的卡自动置灰并说明原因 |
-| FlashAttention | CUDA / Vulkan 下的长上下文加速，建议开启 |
+| 终端 | [localharness-plugin-terminal](https://github.com/yushuchun177/localharness-plugin-terminal) |
+| 网页搜索与获取 | [localharness-plugin-web](https://github.com/yushuchun177/localharness-plugin-web) |
+| 记忆系统 | [localharness-plugin-memory](https://github.com/yushuchun177/localharness-plugin-memory) |
+| 操作电脑 | [localharness-plugin-control](https://github.com/yushuchun177/localharness-plugin-control) |
+| 截图 | [localharness-plugin-screenshot](https://github.com/yushuchun177/localharness-plugin-screenshot) |
+| 识图 | [localharness-plugin-vision](https://github.com/yushuchun177/localharness-plugin-vision) |
+| 语音输入 | [localharness-plugin-voice](https://github.com/yushuchun177/localharness-plugin-voice) |
+| 上下文洞察 | [localharness-plugin-insights](https://github.com/yushuchun177/localharness-plugin-insights) |
+| 智能压缩上下文 | [localharness-plugin-compact](https://github.com/yushuchun177/localharness-plugin-compact) |
+| 子智能体 | [localharness-plugin-subagent](https://github.com/yushuchun177/localharness-plugin-subagent) |
+| 自动化任务 | [localharness-plugin-automation](https://github.com/yushuchun177/localharness-plugin-automation) |
+| 远程操作 | [localharness-plugin-remote](https://github.com/yushuchun177/localharness-plugin-remote) |
+| OAR 智能体 | [localharness-plugin-oar](https://github.com/yushuchun177/localharness-plugin-oar) |
 
-界面会检测并显示显卡型号、显存、计算能力、可用后端以及是否支持张量核心；状态栏显示当前实际生效的方式，例如 `Qwen3 1.7B · Q8_0 · Vulkan · 全部层 · 上下文 8192`。
+每个仓库都包含完整 GPL-3.0 `LICENSE` 与中英双语 `README`。
 
-本机实测（GTX 1050 Ti 4GB，计算能力 6.1，无张量核心），Qwen3-1.7B：
+## 从源码运行
 
-| 方式 | 生成速度 |
-| --- | --- |
-| CPU | 13.7 字/秒 |
-| CUDA（全部层） | 48.6 字/秒 |
-| Vulkan（全部层） | 59.0 字/秒 |
+需要 Godot 4.7：
 
-显存不足时用「12 层 + CPU」这类组合，避免加载失败。
+```
+Godot_v4.7.2-stable_win64.exe --path godot/
+```
 
-**5. 其它说明**
+或打开 `godot/project.godot` 按 F5。模型目录放在工程同级或「设置 → 模型」里指定。
 
-- 程序目录可整体拷贝到其它电脑或 U 盘使用，`model\` 一并带走即可
-- 删除 `chats\` 中的文件即删除对应会话；删除 `config.json` 恢复默认设置
+## 数据目录
 
-## 使用手册（多语言）
+```
+%APPDATA%\Godot\app_userdata\Local-Harness\
+```
 
-| 语言 | 手册 |
-| --- | --- |
-| 简体中文 | [docs/manual/zh-CN.md](docs/manual/zh-CN.md) |
-| English | [docs/manual/en.md](docs/manual/en.md) |
-| 繁體中文 | [docs/manual/zh-TW.md](docs/manual/zh-TW.md) |
-| 日本語 | [docs/manual/ja.md](docs/manual/ja.md) |
-| Русский | [docs/manual/ru.md](docs/manual/ru.md) |
-| Español | [docs/manual/es.md](docs/manual/es.md) |
-| Français | [docs/manual/fr.md](docs/manual/fr.md) |
-| Deutsch | [docs/manual/de.md](docs/manual/de.md) |
+会话、配置、插件、截图、记忆都在这里，可整体备份或迁移。
 
-手册涵盖：安装与启动、准备模型、界面说明、参数、上下文压缩、快捷键、数据与备份、常见问题、许可证。索引见 [docs/manual/README.md](docs/manual/README.md)。
+## 平台
 
-## 测试环境
+仅 Windows。
 
-下列数据来自一台普通台式机，用于说明实际可用性；不同硬件结果会有差异。
+Linux 版已下架，暂不提供；受资金限制，macOS 与鸿蒙 OS 暂不适配。
 
-| 项目 | 配置 |
-| --- | --- |
-| 系统 | Windows 11 专业版 26200（64 位） |
-| CPU | Intel Core i5-4590 @ 3.30GHz，4 核 4 线程（Haswell，支持 SSE4.2 / AVX / AVX2 / FMA3，无 AVX-512） |
-| 内存 | 16 GB |
-| 显卡 | NVIDIA GeForce GTX 1050 Ti 4GB（未参与推理，全程纯 CPU 运行） |
-| 推理引擎 | llama.cpp b12728（commit ea7229481），win-cpu-x64 预编译版，Clang 22.1.8 |
-| 构建环境 | Python 3.12 + PyInstaller 6.22（仅打包用，程序运行不依赖 Python） |
+## 已知限制
 
-实测速度：4 线程、上下文 2048，数字取自 llama-cli 输出的 `[ Prompt: … t/s | Generation: … t/s ]` 统计行。
+- 识图「描述画面」需视觉模型（GGUF + mmproj），未配置时退回系统 OCR
+- 语音识别依赖 Windows 已安装对应语言的识别组件
+- 子智能体会额外加载一份模型，内存较小机器不宜使用
+- 公式支持常见 LaTeX 子集，并非完整 TeX
+- 表格不支持单元格合并
 
-| 模型 | 文件大小 | 加载耗时 | Prompt 处理 | 生成速度 |
-| --- | --- | --- | --- | --- |
-| SmolLM2-360M Q8_0 | 369 MB | 1.6 s | 218.3 t/s | 42.1 t/s |
-| Qwen3-0.6B Q8_0 | 610 MB | 1.5 s | 71.7 t/s | 15.2 t/s |
-| Llama-3.2-1B Q4_K_M | 770 MB | 4.1 s | 113.1 t/s | 21.4 t/s |
-| Qwen2.5-1.5B Q4_K_M | 1.0 GB | 4.9 s | 42.5 t/s | 7.4 t/s |
-| Qwen3-1.7B Q8_0 | 1.7 GB | 8.9 s | 34.5 t/s | 7.1 t/s |
-| Qwen2.5-3B Q4_K_M | 2.0 GB | 10.7 s | 28.2 t/s | 6.1 t/s |
+## 许可
 
-t/s 为每秒 token 数；实际速度受输入长度、温度、系统负载影响，且在无 AVX-512、4 核的平台上测得，较新 CPU 会明显更快。GPU 未被使用，程序不做显存卸载。
-
-## 兼容性
-
-- 模型：所有 llama.cpp 支持的 GGUF 模型。已验证：Qwen3-0.6B、Qwen3-1.7B、Qwen2.5-1.5B、Qwen2.5-3B、Llama-3.2-1B、SmolLM2-360M
-- llama.cpp：启动前探测可执行文件支持的参数，兼容不同版本的 llama.cpp
-- 系统：Windows 10 / 11 x64
-
-## 许可证
-
-本项目以 **GNU General Public License v3.0（GPLv3）** 发布，完整条款见 [LICENSE](LICENSE)。
-
-- 允许打包成二进制形式分发（例如打包为 exe 提供下载）
-- 但只要分发本程序（无论源码还是打包后的二进制），就必须同时提供完整的对应源代码
-- 二次修改后再分发，仍须保持开源，并同样以 GPLv3 授权
-- 本程序不提供任何担保
-
-GGUF 模型权重不属于本项目，遵循各自发布方的许可，不受本项目的 GPLv3 约束。
-
-## 第三方组件
-
-- [llama.cpp](https://github.com/ggml-org/llama.cpp)：MIT License
+GPL-3.0，完整文本见 [LICENSE](LICENSE)。
