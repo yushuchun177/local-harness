@@ -153,23 +153,13 @@ func _is_chat_model(name: String, size_mb: float) -> bool:
 
 func _scan_models() -> void:
 	models.clear()
-	var dir := base_dir.path_join("model")
-	var d := DirAccess.open(dir)
-	if d == null:
-		return
-	d.list_dir_begin()
-	var name := d.get_next()
-	while name != "":
-		if not d.current_is_dir():
-			var full := dir.path_join(name)
-			var size := 0.0
-			var f := FileAccess.open(full, FileAccess.READ)
-			if f:
-				size = float(f.get_length()) / 1048576.0
-			if _is_chat_model(name, size):
-				models.append({"path": full, "label": _pretty_name(name), "size_mb": size})
-		name = d.get_next()
-	d.list_dir_end()
+	var dirs: Array = [base_dir.path_join("model")]
+	for d in cfg.get("model_dirs", []):
+		var p := str(d)
+		if p != "" and not dirs.has(p):
+			dirs.append(p)
+	for dir in dirs:
+		_scan_model_dir(str(dir))
 	models.sort_custom(func(a, b): return a["size_mb"] < b["size_mb"])
 	# 默认挑一个 0.6B 左右、质量够用的；没有就退到最小的
 	var preferred := ""
@@ -185,6 +175,89 @@ func _scan_models() -> void:
 			if m["path"] == want or m["label"] == want:
 				current_model = m["path"]
 		cfg["model"] = current_model
+
+
+## 扫一个目录（含一层子目录，方便放 gguf 的收藏包）
+func _scan_model_dir(dir: String) -> void:
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	d.list_dir_begin()
+	var name := d.get_next()
+	while name != "":
+		if d.current_is_dir():
+			# 子目录也看一眼（很多模型包会套一层）
+			var sub := DirAccess.open(dir.path_join(name))
+			if sub != null:
+				sub.list_dir_begin()
+				var sn := sub.get_next()
+				while sn != "":
+					if not sub.current_is_dir():
+						_add_model(dir.path_join(name).path_join(sn))
+					sn = sub.get_next()
+				sub.list_dir_end()
+		else:
+			_add_model(dir.path_join(name))
+		name = d.get_next()
+	d.list_dir_end()
+
+
+func _add_model(full: String) -> void:
+	if not full.to_lower().ends_with(".gguf"):
+		return
+	for m in models:
+		if str(m["path"]) == full:
+			return
+	var size := 0.0
+	var f := FileAccess.open(full, FileAccess.READ)
+	if f != null:
+		size = float(f.get_length()) / 1048576.0
+	if _is_chat_model(full.get_file(), size):
+		models.append({"path": full, "label": _pretty_name(full.get_file()), "size_mb": size})
+
+
+# ---------------------------------------------------------------- 导入模型文件夹
+## 把一个目录加入搜索列表，立刻重扫并自动适配
+func add_model_dir(path: String) -> Dictionary:
+	var p := path.strip_edges().replace("\\", "/")
+	if p == "":
+		return {"ok": false, "output": "路径为空"}
+	if not DirAccess.dir_exists_absolute(p):
+		return {"ok": false, "output": "这个目录不存在：%s" % p}
+	var saved: Array = cfg.get("model_dirs", [])
+	if saved.has(p):
+		_scan_models()
+		return {"ok": true, "output": "这个文件夹已经在列表里了，已重新扫描"}
+	saved.append(p)
+	cfg["model_dirs"] = saved
+	save_config()
+	_scan_models()
+	if current_model == "" and models.size() > 0:
+		current_model = models[0]["path"]
+		cfg["model"] = current_model
+	return {"ok": true, "output": "已导入：找到 %d 个模型（共 %d 个）" % [_count_in(p), models.size()]}
+
+
+func _count_in(dir: String) -> int:
+	var n := 0
+	for m in models:
+		if str(m["path"]).begins_with(dir):
+			n += 1
+	return n
+
+
+func remove_model_dir(path: String) -> void:
+	var saved: Array = cfg.get("model_dirs", [])
+	saved.erase(path)
+	cfg["model_dirs"] = saved
+	save_config()
+	_scan_models()
+
+
+## 重新扫描全部目录（导入后、放下新模型后）
+func rescan_models() -> int:
+	_scan_models()
+	return models.size()
 
 
 func _pretty_name(file: String) -> String:
@@ -772,6 +845,7 @@ func delete_chat(idx: int) -> void:
 	chats.remove_at(idx)
 	if current_chat >= chats.size():
 		current_chat = chats.size() - 1
+
 
 
 
