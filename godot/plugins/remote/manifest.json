@@ -1,0 +1,91 @@
+{
+  "id": "remote",
+  "name": "远程操作",
+  "name_en": "Remote",
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "description": "把本机变成一个任务端点（HTTP），或者把任务发给另一台开着 Local-Harness 的机器。",
+  "description_en": "Expose this machine as an HTTP task endpoint, or send tasks to another machine running Local-Harness.",
+  "author": "yushuchun177",
+  "homepage": "https://github.com/yushuchun177/localharness-plugin-remote",
+  "min_app": "0.1.0",
+  "requires": {
+    "os": "全平台",
+    "deps": [
+      "curl"
+    ],
+    "disk": "0",
+    "memory": "约 5 MB",
+    "network": true
+  },
+  "settings": [
+    {
+      "key": "port",
+      "label": "默认端口",
+      "type": "int",
+      "default": 8799,
+      "help": "remote_serve / remote_call 不填端口时用这个",
+      "min": 1024,
+      "max": 65535,
+      "unit": ""
+    }
+  ],
+  "commands": [
+    {
+      "name": "serve",
+      "description": "开远程端点",
+      "usage": "/serve [端口]"
+    }
+  ],
+  "tools": [
+    {
+      "name": "remote_serve",
+      "description": "在本机开一个 HTTP 端点：POST /task {\"prompt\":\"...\"} 会用本地模型处理后返回 JSON。",
+      "params": {
+        "port": "int，可选，默认 8799"
+      },
+      "dangerous": true,
+      "level": "danger",
+      "needs": [
+        "监听端口",
+        "局域网"
+      ]
+    },
+    {
+      "name": "remote_call",
+      "description": "把一句任务发给另一台机器上的 Local-Harness 端点，拿回它的回答。",
+      "params": {
+        "host": "string，对方 IP 或主机名",
+        "port": "int，对方端口，默认 8799",
+        "prompt": "string，任务内容"
+      },
+      "dangerous": true,
+      "level": "act",
+      "needs": [
+        "联网"
+      ],
+      "async": true
+    },
+    {
+      "name": "remote_ping",
+      "description": "探测一个端点是否在线。",
+      "params": {
+        "host": "string",
+        "port": "int，可选，默认 8799"
+      },
+      "level": "read",
+      "needs": [
+        "联网"
+      ]
+    },
+    {
+      "name": "remote_stop",
+      "description": "关掉本机端点。",
+      "params": {},
+      "level": "act",
+      "needs": [
+        "监听端口"
+      ]
+    }
+  ]
+}
