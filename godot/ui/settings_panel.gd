@@ -313,6 +313,7 @@ func _build_model() -> void:
 	mrow.add_child(_model_box)
 	_content.add_child(mrow)
 
+	_content.add_child(_model_dirs_block())
 	_content.add_child(_model_profile_card())
 
 	var brow := HBoxContainer.new()
@@ -790,3 +791,100 @@ func _model_profile_card() -> Control:
 	if bool(prof.get("has_override", false)):
 		v.add_child(_label("这个模型已经单独适配过（覆盖了自动推荐）", 10, FAINT))
 	return card
+
+# ---------------------------------------------------------------- 模型文件夹
+## 导入任意目录（可多个），加完立刻扫描并自动适配
+func _model_dirs_block() -> Control:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _style(Color("#12161e"), 10, LINE))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	card.add_child(v)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(_label("模型文件夹", 13, TEXT))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	head.add_child(_label("%d 个模型" % app.models.size(), 10, FAINT))
+	v.add_child(head)
+	v.add_child(_label("可以放在任意位置，导入后自动扫描、自动适配（不用配置参数）", 10, FAINT))
+
+	# 已有目录
+	var dirs: Array = app.cfg.get("model_dirs", [])
+	var default_dir: String = app.base_dir.path_join("model")
+	var shown: Array = [default_dir]
+	shown.append_array(dirs)
+	for d in shown:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var p := _label(str(d), 10, DIM)
+		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		p.clip_text = true
+		p.tooltip_text = str(d)
+		row.add_child(p)
+		var cnt := 0
+		for m in app.models:
+			if str(m["path"]).begins_with(str(d)):
+				cnt += 1
+		row.add_child(_label("%d 个" % cnt, 10, FAINT))
+		if str(d) != default_dir:
+			var rm := _button("移除", false, false)
+			rm.custom_minimum_size = Vector2(52, 24)
+			rm.add_theme_font_size_override("font_size", 10)
+			rm.pressed.connect(func():
+				app.remove_model_dir(str(d))
+				_rebuild_current_tab())
+			row.add_child(rm)
+		v.add_child(row)
+
+	# 按钮行
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 8)
+	var add_btn := _button("＋ 添加文件夹…", true, true)
+	add_btn.custom_minimum_size = Vector2(130, 30)
+	add_btn.pressed.connect(func():
+		var dlg := FileDialog.new()
+		dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+		dlg.access = FileDialog.ACCESS_FILESYSTEM
+		dlg.title = "选择放 GGUF 模型的文件夹"
+		dlg.size = Vector2i(820, 560)
+		add_child(dlg)
+		dlg.dir_selected.connect(func(p: String):
+			var res: Dictionary = app.add_model_dir(p)
+			dlg.queue_free()
+			_status.text = str(res.get("output", ""))
+			_rebuild_current_tab())
+		dlg.canceled.connect(func(): dlg.queue_free())
+		dlg.popup_centered())
+	btns.add_child(add_btn)
+
+	var rescan := _button("重新扫描", false, true)
+	rescan.custom_minimum_size = Vector2(90, 30)
+	rescan.pressed.connect(func():
+		var n: int = app.rescan_models()
+		_status.text = "扫描完成，共 %d 个模型" % n
+		_rebuild_current_tab())
+	btns.add_child(rescan)
+	v.add_child(btns)
+
+	return card
+
+
+## 重建当前标签页（导入/移除后刷新列表）
+func _rebuild_current_tab() -> void:
+	_capture()
+	for c in _content.get_children():
+		c.queue_free()
+	match tab:
+		"general":
+			_build_general()
+		"model":
+			_build_model()
+		"plugins":
+			_build_plugins()
+		"license":
+			_build_license()
+
