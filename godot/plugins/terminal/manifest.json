@@ -1,0 +1,66 @@
+{
+  "id": "terminal",
+  "name": "终端",
+  "name_en": "Terminal",
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "description": "在 Windows 上执行命令，把标准输出和退出码返回给模型。带危险命令黑名单。",
+  "description_en": "Run commands on Windows and return output, with a dangerous-command denylist.",
+  "author": "yushuchun177",
+  "homepage": "https://github.com/yushuchun177/localharness-plugin-terminal",
+  "min_app": "0.1.0",
+  "requires": {
+    "os": "Windows 10+",
+    "deps": [
+      "PowerShell"
+    ],
+    "disk": "< 1 MB",
+    "memory": "约 10 MB",
+    "network": false
+  },
+  "settings": [
+    {
+      "key": "timeout",
+      "label": "默认超时（秒）",
+      "type": "int",
+      "default": 30,
+      "help": "命令超过这个时间会被强制结束",
+      "min": 1,
+      "max": 600,
+      "unit": "秒"
+    },
+    {
+      "key": "extra_deny",
+      "label": "额外禁止的命令",
+      "type": "string",
+      "default": "",
+      "help": "逗号分隔，例如 format,diskpart；留空表示只用内置黑名单",
+      "placeholder": "format,diskpart"
+    }
+  ],
+  "commands": [
+    {
+      "name": "sh",
+      "description": "执行一条命令",
+      "usage": "/sh dir"
+    }
+  ],
+  "tools": [
+    {
+      "name": "terminal_run",
+      "description": "执行一条命令（cmd.exe /c），返回 stdout、stderr 和退出码。适合看文件、查系统信息、跑小脚本。",
+      "params": {
+        "command": "string，要执行的命令",
+        "cwd": "string，可选，工作目录",
+        "timeout": "int，可选，超时秒数，默认 30"
+      },
+      "dangerous": true,
+      "level": "danger",
+      "needs": [
+        "启动进程",
+        "读写文件"
+      ],
+      "async": true
+    }
+  ]
+}
