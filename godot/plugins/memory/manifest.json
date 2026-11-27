@@ -1,0 +1,85 @@
+{
+  "id": "memory",
+  "name": "记忆系统",
+  "name_en": "Memory",
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "description": "长期记忆：把用户偏好、事实记下来，需要时按关键词检索。存在本地 user:// 里，不上传。",
+  "description_en": "Long-term memory: store facts, recall by keyword, local only.",
+  "author": "yushuchun177",
+  "homepage": "https://github.com/yushuchun177/localharness-plugin-memory",
+  "min_app": "0.1.0",
+  "requires": {
+    "os": "全平台",
+    "deps": [],
+    "disk": "取决于条数（1 条约 200 字节）",
+    "memory": "约 5 MB",
+    "network": false
+  },
+  "settings": [
+    {
+      "key": "max_items",
+      "label": "最多记忆条数",
+      "type": "int",
+      "default": 500,
+      "min": 10,
+      "max": 10000,
+      "unit": "条"
+    },
+    {
+      "key": "auto",
+      "label": "让助手自己决定要不要记",
+      "type": "bool",
+      "default": true
+    }
+  ],
+  "commands": [
+    {
+      "name": "mem",
+      "description": "记住一句话",
+      "usage": "/mem 要记住的内容"
+    },
+    {
+      "name": "memlist",
+      "description": "看已记住的内容",
+      "usage": "/memlist [关键词]"
+    }
+  ],
+  "tools": [
+    {
+      "name": "memory_remember",
+      "description": "记住一条事实或偏好（尽量一句话，带关键词方便以后检索）。",
+      "params": {
+        "text": "string，要记住的内容",
+        "tag": "string，可选，分类标签，例如 偏好 / 事实 / 项目"
+      },
+      "level": "act",
+      "needs": [
+        "本地存储"
+      ]
+    },
+    {
+      "name": "memory_recall",
+      "description": "按关键词检索记忆；不给关键词就返回最近 10 条。",
+      "params": {
+        "query": "string，可选",
+        "limit": "int，可选，默认 10"
+      },
+      "level": "read",
+      "needs": [
+        "本地存储"
+      ]
+    },
+    {
+      "name": "memory_forget",
+      "description": "按关键词删除匹配到的记忆。",
+      "params": {
+        "query": "string，关键词"
+      },
+      "level": "act",
+      "needs": [
+        "本地存储"
+      ]
+    }
+  ]
+}
