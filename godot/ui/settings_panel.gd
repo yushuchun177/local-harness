@@ -282,6 +282,7 @@ func _build_general() -> void:
 func _build_model() -> void:
 	_content.add_child(_label(I18N.t("tab_model"), 17, TEXT))
 
+	# 来源：本地 / 在线。选哪个就只展开哪一块
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 10)
 	srow.add_child(_label(I18N.t("model_source"), 13, DIM))
@@ -296,8 +297,16 @@ func _build_model() -> void:
 	srow.add_child(_src_box)
 	_content.add_child(srow)
 
-	# 本地
-	_content.add_child(_label("— " + I18N.t("source_local") + " —", 12, FAINT))
+	var local_group := VBoxContainer.new()
+	local_group.add_theme_constant_override("separation", 8)
+	_content.add_child(local_group)
+
+	var api_group := VBoxContainer.new()
+	api_group.add_theme_constant_override("separation", 8)
+	_content.add_child(api_group)
+
+	# ---------------- 本地 llama.cpp ----------------
+	local_group.add_child(_section_head(I18N.t("source_local")))
 	var mrow := HBoxContainer.new()
 	mrow.add_theme_constant_override("separation", 10)
 	mrow.add_child(_label(I18N.t("model_pick"), 13, DIM))
@@ -311,10 +320,10 @@ func _build_model() -> void:
 		if app.models[i]["path"] == str(draft.get("model", app.current_model)):
 			_model_box.select(i)
 	mrow.add_child(_model_box)
-	_content.add_child(mrow)
+	local_group.add_child(mrow)
 
-	_content.add_child(_model_dirs_block())
-	_content.add_child(_model_profile_card())
+	local_group.add_child(_model_dirs_block())
+	local_group.add_child(_model_profile_card())
 
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
@@ -337,9 +346,44 @@ func _build_model() -> void:
 	_layers_spin.max_value = 200
 	_layers_spin.value = int(draft.get("gpu_layers", -1))
 	_layers_spin.custom_minimum_size = Vector2(80, 30)
+	_layers_spin.tooltip_text = "-1 = 按模型自动（推荐）"
 	brow.add_child(_layers_spin)
-	_content.add_child(brow)
+	local_group.add_child(brow)
 
+	# ---------------- 在线 API ----------------
+	api_group.add_child(_section_head(I18N.t("source_api")))
+	api_group.add_child(_label(I18N.t("api_hint"), 11, FAINT))
+
+	var arow := HBoxContainer.new()
+	arow.add_theme_constant_override("separation", 10)
+	arow.add_child(_label(I18N.t("api_base"), 13, DIM))
+	_api_base = _edit(str(draft.get("api_base", "")), I18N.t("api_base_ph"))
+	_api_base.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	arow.add_child(_api_base)
+	api_group.add_child(arow)
+
+	var krow := HBoxContainer.new()
+	krow.add_theme_constant_override("separation", 10)
+	krow.add_child(_label(I18N.t("api_key"), 13, DIM))
+	_api_key = _edit(str(draft.get("api_key", "")), I18N.t("api_key_ph"))
+	_api_key.secret = true
+	_api_key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	krow.add_child(_api_key)
+	api_group.add_child(krow)
+
+	var mrow2 := HBoxContainer.new()
+	mrow2.add_theme_constant_override("separation", 10)
+	mrow2.add_child(_label(I18N.t("api_model"), 13, DIM))
+	_api_model = _edit(str(draft.get("api_model", "")), I18N.t("api_model_ph"))
+	_api_model.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mrow2.add_child(_api_model)
+	var fetch := _button(I18N.t("api_fetch"), false, true)
+	fetch.custom_minimum_size = Vector2(110, 28)
+	fetch.pressed.connect(_fetch_models)
+	mrow2.add_child(fetch)
+	api_group.add_child(mrow2)
+
+	# ---------------- 通用：上下文 / 温度 / 回复上限 ----------------
 	var prow := HBoxContainer.new()
 	prow.add_theme_constant_override("separation", 10)
 	prow.add_child(_label(I18N.t("model_ctx"), 13, DIM))
@@ -368,65 +412,32 @@ func _build_model() -> void:
 	prow.add_child(_max_spin)
 	_content.add_child(prow)
 
-	# 在线 API
-	_content.add_child(_label("— " + I18N.t("source_api") + " —", 12, FAINT))
-	_content.add_child(_label(I18N.t("api_hint"), 11, FAINT))
+	# 折叠：选哪个来源就只展开哪一块
+	var apply_fold := func():
+		var online: bool = _src_box.selected == 1
+		local_group.visible = not online
+		api_group.visible = online
+		_ctx_spin.visible = not online
+	_src_box.item_selected.connect(func(_i: int): apply_fold.call())
+	apply_fold.call()
 
-	var arow := HBoxContainer.new()
-	arow.add_theme_constant_override("separation", 10)
-	arow.add_child(_label(I18N.t("api_base"), 13, DIM))
-	_api_base = _edit(str(draft.get("api_base", "")), I18N.t("api_base_ph"))
-	_api_base.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	arow.add_child(_api_base)
-	_content.add_child(arow)
 
-	var krow := HBoxContainer.new()
-	krow.add_theme_constant_override("separation", 10)
-	krow.add_child(_label(I18N.t("api_key"), 13, DIM))
-	_api_key = _edit(str(draft.get("api_key", "")), I18N.t("api_key_ph"))
-	_api_key.secret = true
-	_api_key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	krow.add_child(_api_key)
-	_content.add_child(krow)
-
-	var mrow2 := HBoxContainer.new()
-	mrow2.add_theme_constant_override("separation", 10)
-	mrow2.add_child(_label(I18N.t("api_model"), 13, DIM))
-	_api_model = _edit(str(draft.get("api_model", "")), I18N.t("api_model_ph"))
-	_api_model.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mrow2.add_child(_api_model)
-	var fetch := _button(I18N.t("api_fetch"), false, true)
-	fetch.custom_minimum_size = Vector2(110, 28)
-	fetch.pressed.connect(_fetch_models)
-	mrow2.add_child(fetch)
-	_content.add_child(mrow2)
-
-	_api_list = OptionButton.new()
-	_api_list.custom_minimum_size = Vector2(0, 30)
-	_api_list.add_theme_font_override("font", _f(12))
-	_api_list.add_theme_stylebox_override("normal", _style(PANEL2, 8, LINE))
-	_api_list.add_theme_color_override("font_color", TEXT)
-	_api_list.item_selected.connect(func(i): _api_model.text = _api_list.get_item_text(i))
-	_content.add_child(_api_list)
-	_content.add_child(_label(I18N.t("api_offline_hint"), 10, FAINT))
-
-	# 视觉模型（识图插件用；留空就退回系统 OCR）
-	_content.add_child(_label("— " + I18N.t("vision_title") + " —", 12, FAINT))
-	_content.add_child(_label(I18N.t("vision_hint"), 10, FAINT))
-	var vrow := HBoxContainer.new()
-	vrow.add_theme_constant_override("separation", 10)
-	vrow.add_child(_label(I18N.t("vision_model"), 13, DIM))
-	_vision_model = _edit(str(draft.get("vision_model", "")), "…/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf")
-	_vision_model.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vrow.add_child(_vision_model)
-	_content.add_child(vrow)
-	var mrow3 := HBoxContainer.new()
-	mrow3.add_theme_constant_override("separation", 10)
-	mrow3.add_child(_label(I18N.t("vision_mmproj"), 13, DIM))
-	_vision_mmproj = _edit(str(draft.get("vision_mmproj", "")), "…/mmproj-model-f16.gguf")
-	_vision_mmproj.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mrow3.add_child(_vision_mmproj)
-	_content.add_child(mrow3)
+## 小标题：— 本地 llama.cpp —
+func _section_head(text: String) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var left := ColorRect.new()
+	left.color = LINE
+	left.custom_minimum_size = Vector2(14, 1)
+	left.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(left)
+	row.add_child(_label(text, 12, FAINT))
+	var right := ColorRect.new()
+	right.color = LINE
+	right.custom_minimum_size = Vector2(14, 1)
+	right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(right)
+	return row
 
 
 func _fetch_models() -> void:
@@ -782,6 +793,9 @@ func _model_profile_card() -> Control:
 		_status.text = "已按推荐适配，保存后生效")
 	act.add_child(use)
 	v.add_child(act)
+
+	# 支持范围写清楚
+	v.add_child(_label("适配范围：130B 及以下（含）模型，按 GGUF 文件头自动计算", 10, DIM))
 
 	if str(prof.get("note", "")) != "":
 		var note := _label("⚠ " + str(prof["note"]), 10, Color("#e0a458"))
