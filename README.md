@@ -1,3 +1,12 @@
+> **当前版本：2.0.0（Godot 重写版）**
+>
+> - 安装包：[Releases → v2.0.0](https://github.com/yushuchun177/local-harness/releases/tag/v2.0.0)（Windows x64，解压双击）
+> - 源码：本仓库 [`godot/`](godot/) 目录
+> - 支持平台：仅 Windows。Linux 版已下架；受资金限制，macOS 与鸿蒙 OS 暂不适配
+> - 仓库根目录的 Python 实现（`main.py`、`local_harness/` 等）为 1.x 旧版，已停止维护
+
+---
+
 # Local-Harness
 
 面向 [llama.cpp](https://github.com/ggml-org/llama.cpp) 的图形化 Harness 调度工具：把模型加载、参数配置和多轮对话收进一个窗口，不用敲终端命令行。
