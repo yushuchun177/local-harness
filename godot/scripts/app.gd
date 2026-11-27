@@ -202,11 +202,21 @@ func _scan_model_dir(dir: String) -> void:
 	d.list_dir_end()
 
 
+func _file_mb(path: String) -> float:
+	var f := FileAccess.open(path, FileAccess.READ)
+	return float(f.get_length()) / 1048576.0 if f != null else 0.0
+
+
 func _add_model(full: String) -> void:
 	if not full.to_lower().ends_with(".gguf"):
 		return
 	for m in models:
 		if str(m["path"]) == full:
+			return
+	# 同一个文件被两个目录同时扫到（比如复制了一份），按"文件名+大小"去重
+	var fname := full.get_file()
+	for m in models:
+		if str(m["path"]).get_file() == fname and int(m["size_mb"]) == int(_file_mb(full)):
 			return
 	var size := 0.0
 	var f := FileAccess.open(full, FileAccess.READ)
