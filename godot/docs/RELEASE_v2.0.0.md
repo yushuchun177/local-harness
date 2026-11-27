@@ -73,6 +73,8 @@ Windows 的 `cmd` 以 GBK 解释命令行，中文参数在其中会损坏。2.0
 
 ## 模型适配
 
+**支持范围：130B 及以下（含）模型**，从 0.3B 到 130B 均可，按 GGUF 文件头自动计算。
+
 读取 GGUF 文件头即可获得架构、参数量、层数、原生上下文、注意头与 KV 头数量，据此结合本机显存与内存计算：
 
 - 可放入显存的层数
@@ -82,7 +84,7 @@ Windows 的 `cmd` 以 GBK 解释命令行，中文参数在其中会损坏。2.0
 
 每个模型的适配结果单独保存（`user://models/models.json`），更换模型即更换整套参数。参数优先级为：当前模型的覆盖值 > 自动检测结果 > 全局默认值。
 
-支持识别 130B 级别模型。若本机资源不足，界面会给出所需与可用内存的具体数字，不会尝试加载后卡死。
+本机资源不足时，界面会给出所需与可用内存的具体数字，不会尝试加载后卡死。
 
 ---
 
@@ -130,7 +132,7 @@ Version 2.0 moves the desktop client from Python + tkinter to Godot 4.7. The int
 
 **Chinese environments.** Commands travel through a UTF-16 PowerShell script so `cmd`'s GBK decoding cannot damage them; pages are decoded by their declared charset; search falls back to Bing; OCR defaults to Simplified Chinese; speech prefers a Chinese voice.
 
-**Model fitting.** GGUF headers provide architecture, parameter count, layer count, native context and attention layout. Combined with available VRAM and RAM, the client derives the number of layers to offload, a context size, thread count and an explicit warning when memory is insufficient. Fit settings are stored per model and take precedence over global defaults. Models at the 130B scale are recognised; if the machine cannot hold one, the interface states the required and available memory instead of attempting to load it.
+**Model fitting.** Models up to and including 130B are supported (0.3B–130B), with the fit derived from the GGUF header. GGUF headers provide architecture, parameter count, layer count, native context and attention layout. Combined with available VRAM and RAM, the client derives the number of layers to offload, a context size, thread count and an explicit warning when memory is insufficient. Fit settings are stored per model and take precedence over global defaults. If the machine cannot hold a given model, the interface states the required and available memory instead of attempting to load it.
 
 **Install.** Unzip, place GGUF models in `model/`, run `LocalHarness.exe`, then install plugins from Settings. All data lives in `%APPDATA%\Godot\app_userdata\Local-Harness\`.
 
