@@ -1,4 +1,4 @@
-extends Node
+﻿extends Node
 ## Plugins —— 插件宿主。
 ##
 ## 每个插件是一个独立目录（可以单独发布成 GitHub 仓库），结构固定：
@@ -6,7 +6,7 @@ extends Node
 ##     manifest.json   {id,name,version,description,author,tools:[...]}
 ##     main.gd         extends Node；实现 run(tool_name, args) -> Dictionary
 ##
-## 目录搜索顺序：res://plugins（随程序发布）、user://plugins（用户自己装的）。
+## 目录搜索顺序：user://plugins（用户自己装的，优先）、res://plugins（随程序打包）。
 ## 同名插件先出现的生效。
 ##
 ## 工具调用协议：为了让任意 GGUF 模型都能用（包括不会 function calling 的小模型），
@@ -15,7 +15,7 @@ extends Node
 
 signal tools_changed
 
-const SEARCH_DIRS := ["res://plugins", "user://plugins"]
+const SEARCH_DIRS := ["user://plugins", "res://plugins"]
 
 var loaded: Array = []          # [{manifest, node, dir}]
 
@@ -62,7 +62,9 @@ func _load_one(dir: String, id_hint: String) -> void:
 		if str(p["manifest"].get("id", "")) == str(parsed.get("id", id_hint)):
 			return
 	var spath := dir.path_join("main.gd")
-	if not FileAccess.file_exists(spath):
+	# 打包成 exe 后脚本是 .remap，FileAccess 看不到，用 ResourceLoader 判断
+	var exists := FileAccess.file_exists(spath) or ResourceLoader.exists(spath)
+	if not exists:
 		push_warning("插件缺少 main.gd：%s" % dir)
 		return
 	var script: Script = load(spath)
@@ -360,3 +362,5 @@ func _thread_run_command(node: Node, cmd: String, args: String) -> void:
 		_async_result = res
 	else:
 		_async_result = {"ok": true, "output": str(res)}
+
+
