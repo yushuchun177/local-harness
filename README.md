@@ -5,7 +5,7 @@
 模型（GGUF）放在本机，推理由 llama.cpp 完成，对话、记忆、配置都不离开硬盘。
 断网可用，关闭程序即全部结束。
 
-当前版本：**2.0.0**（Godot 4.7 重写版）
+当前版本：**2.1.0**（Godot 4.7；窗口自适应、模型文件夹导入）
 
 支持 **130B 及以下（含）** 的模型（0.3B–130B），按 GGUF 文件头自动适配。
 
@@ -13,12 +13,12 @@
 
 ## 下载
 
-[**Releases → v2.0.0**](https://github.com/yushuchun177/local-harness/releases/tag/v2.0.0)
+[**Releases → v2.1.0**](https://github.com/yushuchun177/local-harness/releases/tag/v2.0.0)
 
 | 文件 | 说明 |
 | --- | --- |
-| `LocalHarness-2.0.0-win64.zip` | 解压即用，双击 `LocalHarness.exe` |
-| `LocalHarness-2.0.0-src.zip` | 源码包（不含模型） |
+| `LocalHarness-2.1.0-win64.zip` | 解压即用，双击 `LocalHarness.exe` |
+| `LocalHarness-2.1.0-src.zip` | 源码包（不含模型） |
 
 安装步骤：
 
