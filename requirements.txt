@@ -1,3 +1,0 @@
-# local-harness 没有第三方运行时依赖：界面用标准库 tkinter，
-# 推理交给 llama.cpp 的 llama-cli（可执行文件，不在 pip 里）。
-# 这个文件留空是有意为之，方便 `pip install -r requirements.txt` 不报错。
