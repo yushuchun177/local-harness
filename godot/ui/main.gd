@@ -40,6 +40,8 @@ var _sidebar: PanelContainer
 var _chat_title: Label
 var _toggle_btn: Button
 var _sidebar_open: bool = true
+var _auto_sidebar_hidden: bool = false
+const SIDEBAR_W := 264.0
 
 var _settings_layer: ColorRect
 var _license_layer: ColorRect = null
@@ -53,8 +55,16 @@ var _agent_running: bool = false
 
 
 func _ready() -> void:
+	# 自动加载顺序不保证 App 已读完配置，这里再同步一次语言
+	I18N.lang = str(App.cfg.get("lang", "zh"))
+	if not I18N.lang in ["zh", "en"]:
+		I18N.lang = "zh"
 	_load_fonts()
 	_build_ui()
+	get_window().min_size = Vector2i(860, 560)
+	_restore_window_size()
+	get_window().size_changed.connect(_on_window_resized)
+	_apply_responsive.call_deferred()
 	_connect_app()
 	# 把文件夹或 .gguf 直接拖进窗口就能导入
 	get_window().files_dropped.connect(_on_files_dropped)
@@ -98,6 +108,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--mdtest"):
 		_run_mdtest()
+		return
+	if OS.get_cmdline_user_args().has("--demo"):
+		_run_demo()
 		return
 	var tool_name := _requested_tool()
 	if tool_name != "":
@@ -422,7 +435,8 @@ func _open_plugin_panel(plugin_id: String) -> void:
 	layer.add_child(center)
 
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(760, 600)
+	var vp := get_viewport_rect().size
+	card.custom_minimum_size = Vector2(clampf(vp.x * 0.78, 560.0, 980.0), clampf(vp.y * 0.80, 420.0, 760.0))
 	card.add_theme_stylebox_override("panel", _style(Color("#101319"), 16, Color("#2a3446")))
 	center.add_child(card)
 
@@ -467,7 +481,7 @@ func _open_plugin_panel(plugin_id: String) -> void:
 	# ① 插件自己的设置界面（插件目录里的 ui.gd）
 	var ui_path := str(p.get("dir", "")).path_join("ui.gd")
 	var hosted := false
-	if FileAccess.file_exists(ui_path):
+	if FileAccess.file_exists(ui_path) or ResourceLoader.exists(ui_path):
 		var scr = load(ui_path)
 		if scr is GDScript and scr.can_instantiate():
 			var node = scr.new()
@@ -2136,7 +2150,8 @@ func _open_model_picker() -> void:
 	layer.add_child(center)
 
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(500, 0)
+	var vp2 := get_viewport_rect().size
+	card.custom_minimum_size = Vector2(clampf(vp2.x * 0.42, 420.0, 640.0), 0)
 	card.add_theme_stylebox_override("panel", _style(Color("#101319"), 16, Color("#2a3446")))
 	center.add_child(card)
 
@@ -2276,3 +2291,81 @@ func _open_model_picker() -> void:
 	bottom.add_child(rescan)
 	v.add_child(bottom)
 
+
+## 演示脚本：按固定节奏自动操作界面，方便录屏（不需要外部鼠标键盘）
+func _run_demo() -> void:
+	await get_tree().create_timer(1.4).timeout
+	# ① 打开模型列表
+	_open_model_picker()
+	await get_tree().create_timer(4.2).timeout
+	# ② 关掉列表，选 3B
+	if _quick_layer != null:
+		_quick_layer.queue_free()
+		_quick_layer = null
+	var target := -1
+	for i in App.models.size():
+		if str(App.models[i]["path"]).to_lower().find("qwen2.5-3b") >= 0:
+			target = i
+	if target >= 0:
+		_on_model_selected(target)
+	await get_tree().create_timer(5.0).timeout
+	# ③ 打开设置 → 模型
+	_open_settings("model")
+	await get_tree().create_timer(7.5).timeout
+	# ④ 关掉设置，停回主界面
+	if _settings_layer != null and is_instance_valid(_settings_layer):
+		_settings_layer.queue_free()
+		_settings_layer = null
+	print("[demo] 演示流程结束")
+
+
+## 窗口大小变化：侧栏、按钮宽度、面板尺寸都跟着变
+func _on_window_resized() -> void:
+	_apply_responsive()
+
+
+func _apply_responsive() -> void:
+	if _sidebar == null:
+		return
+	# 用视口尺寸（canvas_items + expand 下就是 UI 单位），不是物理像素
+	var vp := get_viewport_rect().size
+	var w := float(vp.x)
+
+	# 窄窗口自动收侧栏；变宽了自动放回来
+	var want_hide := w < 980.0
+	if want_hide and not _auto_sidebar_hidden and _sidebar_open:
+		_auto_sidebar_hidden = true
+		_sidebar.visible = false
+		_sidebar.custom_minimum_size.x = 0.0
+	elif not want_hide and _auto_sidebar_hidden:
+		_auto_sidebar_hidden = false
+		if _sidebar_open:
+			_sidebar.visible = true
+			_sidebar.custom_minimum_size.x = SIDEBAR_W
+
+	# 侧栏宽度分档
+	if _sidebar_open and not _auto_sidebar_hidden:
+		var sw := SIDEBAR_W if w >= 1360.0 else (240.0 if w >= 1120.0 else 220.0)
+		_sidebar.custom_minimum_size.x = sw
+
+	# 底部模型按钮宽度
+	if _model_btn != null:
+		_model_btn.custom_minimum_size.x = clampf(w * 0.17, 150.0, 260.0)
+
+
+func _restore_window_size() -> void:
+	var w := int(App.cfg.get("win_w", 0))
+	var h := int(App.cfg.get("win_h", 0))
+	if w >= 860 and h >= 560:
+		get_window().size = Vector2i(w, h)
+
+
+func _save_window_size() -> void:
+	var win := get_window().size
+	App.set_cfg("win_w", int(win.x))
+	App.set_cfg("win_h", int(win.y))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		_save_window_size()
