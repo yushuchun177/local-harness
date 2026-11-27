@@ -82,7 +82,7 @@ plugins 仓库    13 个插件，各自独立：
                 （应用从这里读取插件列表）
 ```
 
-根目录的 `main.py`、`main_gui.py`、`local_harness/` 等为 **1.x 的 Python 实现**，已停止维护。
+1.x 的 Python 实现已从本仓库移除（可在提交历史中查看）。
 
 ## 插件
 
