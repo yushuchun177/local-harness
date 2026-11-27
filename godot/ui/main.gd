@@ -32,7 +32,7 @@ var _composer: TextEdit
 var _send_btn: Button
 var _chat_list: VBoxContainer
 var _search: LineEdit
-var _model_btn: OptionButton
+var _model_btn: Button
 var _backend_chip: Label
 var _status_lbl: Label
 var _footer: Label
@@ -75,6 +75,8 @@ func _ready() -> void:
 	if serve_port > 0:
 		_run_serve_mode(serve_port)
 		return
+	if OS.get_environment("LH_MODEL_PICKER") != "":
+		_open_model_picker.call_deferred()
 	var panel_pid := OS.get_environment("LH_PLUGIN_PANEL")
 	if panel_pid != "":
 		_open_plugin_panel.call_deferred(panel_pid)
@@ -378,6 +380,9 @@ func _refresh_plugin_toggle() -> void:
 
 ## 侧栏底部的模型快捷入口文字
 func _refresh_model_chip() -> void:
+	if _model_btn != null:
+		var cur := App.current_model.get_file().get_basename()
+		_model_btn.text = ("%s  ▾" % cur) if cur != "" else "选择模型  ▾"
 	if _model_chip == null:
 		return
 	var label := App.current_model.get_file().get_basename()
@@ -547,17 +552,18 @@ func _build_main() -> Control:
 	var by := _label(I18N.t("credit"), 10, Color(0.62, 0.66, 0.74, 0.45))
 	hbox.add_child(by)
 
-	_model_btn = OptionButton.new()
-	_model_btn.custom_minimum_size = Vector2(220, 30)
-	# 不抢键盘焦点：否则在输入框里打字会被下拉框当成首字母跳转，模型就莫名换了
+	_model_btn = Button.new()
+	_model_btn.custom_minimum_size = Vector2(240, 30)
 	_model_btn.focus_mode = Control.FOCUS_NONE
+	_model_btn.clip_text = true
 	_model_btn.add_theme_font_override("font", _f(12))
 	_model_btn.add_theme_font_size_override("font_size", 12)
 	_model_btn.add_theme_stylebox_override("normal", _style(PANEL2, 8, LINE))
 	_model_btn.add_theme_stylebox_override("hover", _style(PANEL2.lightened(0.06), 8, LINE))
 	_model_btn.add_theme_stylebox_override("pressed", _style(PANEL2, 8, ACCENT))
 	_model_btn.add_theme_color_override("font_color", TEXT)
-	_model_btn.item_selected.connect(_on_model_selected)
+	_model_btn.tooltip_text = "选择模型（点击）"
+	_model_btn.pressed.connect(_open_model_picker)
 
 	_backend_chip = _label("", 12, ACCENT)
 	var chip_panel := PanelContainer.new()
@@ -1132,24 +1138,18 @@ var _model_sig: String = ""
 
 
 func _refresh_header() -> void:
-	var sig := "%d|%s|%s" % [App.models.size(), App.current_model, str(App.cfg.get("lang", "zh"))]
-	if sig != _model_sig:
-		_model_sig = sig
-		_model_btn.clear()
-		for i in App.models.size():
-			_model_btn.add_item(App.models[i]["label"])
-			if App.models[i]["path"] == App.current_model:
-				_model_btn.select(i)
-		if App.models.is_empty():
-			_model_btn.add_item(I18N.t("no_model"))
 	_backend_chip.text = App.backend_text()
+	_refresh_model_chip()
+	_refresh_footer()
+
+
+func _refresh_footer() -> void:
 	var gpu := ""
 	if not App.gpu.is_empty():
 		gpu = " · %s" % str(App.gpu.get("name", ""))
 	var prof: Dictionary = App.profile_for()
 	var ctx_now := int(prof.get("ctx", App.cfg.get("ctx", 4096)))
 	_footer.text = (I18N.t("footer_ctx") % ctx_now) + gpu
-	_refresh_model_chip()
 
 
 func _on_model_selected(idx: int) -> void:
@@ -2114,3 +2114,165 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 			_toast(str(res.get("output", "")))
 	_refresh_header()
 	_refresh_model_chip()
+
+
+## 模型选择弹层：列出所有模型（大小 + 自动适配结果），点一下就切换
+func _open_model_picker() -> void:
+	if _quick_layer != null:
+		return
+	var layer := ColorRect.new()
+	layer.color = Color(0, 0, 0, 0.6)
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.gui_input.connect(func(evv: InputEvent):
+		if evv is InputEventMouseButton and evv.pressed:
+			layer.queue_free()
+			_quick_layer = null)
+	add_child(layer)
+	_quick_layer = layer
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(center)
+
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(500, 0)
+	card.add_theme_stylebox_override("panel", _style(Color("#101319"), 16, Color("#2a3446")))
+	center.add_child(card)
+
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_left", 18)
+	pad.add_theme_constant_override("margin_right", 18)
+	pad.add_theme_constant_override("margin_top", 16)
+	pad.add_theme_constant_override("margin_bottom", 14)
+	card.add_child(pad)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	pad.add_child(v)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	top.add_child(_label("模型", 15, TEXT))
+	var range_lbl := _label("适配 130B 及以下（含）", 10, FAINT)
+	range_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(range_lbl)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(sp)
+	var close := Button.new()
+	close.text = "X"
+	close.focus_mode = Control.FOCUS_NONE
+	close.custom_minimum_size = Vector2(30, 30)
+	close.add_theme_stylebox_override("normal", _style(Color(0, 0, 0, 0), 8))
+	close.add_theme_color_override("font_color", DIM)
+	close.pressed.connect(func():
+		layer.queue_free()
+		_quick_layer = null)
+	top.add_child(close)
+	v.add_child(top)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 340)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 4)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	for m in App.models:
+		var prof: Dictionary = App.profile_for(str(m["path"]))
+		var is_cur: bool = str(m["path"]) == App.current_model
+		var row_btn := Button.new()
+		row_btn.focus_mode = Control.FOCUS_NONE
+		row_btn.custom_minimum_size = Vector2(0, 48)
+		row_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_btn.add_theme_stylebox_override("normal",
+			_style(Color("#1b2130") if is_cur else Color("#141821"), 10, ACCENT if is_cur else LINE))
+		row_btn.add_theme_stylebox_override("hover", _style(Color("#1f2634"), 10, LINE))
+		row_btn.add_theme_color_override("font_color", TEXT)
+
+		var hv := HBoxContainer.new()
+		hv.set_anchors_preset(Control.PRESET_FULL_RECT)
+		hv.add_theme_constant_override("separation", 10)
+		hv.offset_left = 12
+		hv.offset_right = -12
+		hv.offset_top = 7
+		hv.offset_bottom = -7
+		hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_btn.add_child(hv)
+
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 1)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var name_lbl := _label(str(m["label"]), 12, TEXT)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(name_lbl)
+		var sub := "%.1f GB" % (float(m["size_mb"]) / 1024.0)
+		if not prof.is_empty():
+			sub = "%s · %s · %s · 适配 ngl %d / ctx %d" % [
+				str(prof.get("family", "")), str(prof.get("quant", "")),
+				sub, int(prof.get("ngl", 0)), int(prof.get("ctx", 0))]
+		var sub_lbl := _label(sub, 10, FAINT)
+		sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(sub_lbl)
+		hv.add_child(col)
+		if is_cur:
+			var mark := _label("当前", 10, ACCENT)
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hv.add_child(mark)
+
+		var path := str(m["path"])
+		row_btn.pressed.connect(func():
+			var idx := -1
+			for i in App.models.size():
+				if str(App.models[i]["path"]) == path:
+					idx = i
+			layer.queue_free()
+			_quick_layer = null
+			if idx >= 0:
+				_on_model_selected(idx))
+		list.add_child(row_btn)
+
+	if App.models.is_empty():
+		list.add_child(_label("model 目录里没有 .gguf 文件", 11, FAINT))
+
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 8)
+	var add_btn := _button("＋ 添加模型文件夹…", false)
+	add_btn.custom_minimum_size = Vector2(150, 30)
+	add_btn.pressed.connect(func():
+		var dlg := FileDialog.new()
+		dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+		dlg.access = FileDialog.ACCESS_FILESYSTEM
+		dlg.title = "选择放 GGUF 模型的文件夹"
+		dlg.size = Vector2i(820, 560)
+		layer.add_child(dlg)
+		dlg.dir_selected.connect(func(p: String):
+			var res: Dictionary = App.add_model_dir(p)
+			_toast(str(res.get("output", "")))
+			dlg.queue_free()
+			layer.queue_free()
+			_quick_layer = null
+			_refresh_header()
+			_open_model_picker())
+		dlg.canceled.connect(func(): dlg.queue_free())
+		dlg.popup_centered())
+	bottom.add_child(add_btn)
+
+	var spacer2 := Control.new()
+	spacer2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(spacer2)
+	var rescan := _button("重新扫描", false)
+	rescan.custom_minimum_size = Vector2(90, 30)
+	rescan.pressed.connect(func():
+		var n: int = App.rescan_models()
+		_toast("扫描完成，共 %d 个模型" % n)
+		layer.queue_free()
+		_quick_layer = null
+		_refresh_header())
+	bottom.add_child(rescan)
+	v.add_child(bottom)
+
