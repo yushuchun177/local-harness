@@ -50,7 +50,8 @@ func setup(app_node: Node, close_cb: Callable) -> void:
 	draft = app.cfg.duplicate(true)
 	_load_font()
 	add_theme_stylebox_override("panel", _style(PANEL, 16, LINE))
-	custom_minimum_size = Vector2(860, 600)
+	var vp := get_viewport_rect().size
+	custom_minimum_size = Vector2(clampf(vp.x * 0.80, 720.0, 1040.0), clampf(vp.y * 0.84, 520.0, 780.0))
 	_build()
 	var want := OS.get_environment("LH_TAB")
 	if want != "":
