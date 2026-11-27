@@ -56,6 +56,8 @@ func _ready() -> void:
 	_load_fonts()
 	_build_ui()
 	_connect_app()
+	# 把文件夹或 .gguf 直接拖进窗口就能导入
+	get_window().files_dropped.connect(_on_files_dropped)
 
 	App.server_state.connect(_on_server_state)
 	App.chat_delta.connect(_on_delta)
@@ -2100,3 +2102,15 @@ func _fill_older_messages(visible: Array, count: int) -> void:
 		made += 1
 		if made % 3 == 0:
 			await get_tree().process_frame
+
+
+## 拖入文件夹 → 导入为模型目录；拖入 .gguf → 导入它所在的文件夹
+func _on_files_dropped(files: PackedStringArray) -> void:
+	for f in files:
+		if f.to_lower().ends_with(".gguf"):
+			App.add_model_dir(f.get_base_dir())
+		elif DirAccess.dir_exists_absolute(f):
+			var res: Dictionary = App.add_model_dir(f)
+			_toast(str(res.get("output", "")))
+	_refresh_header()
+	_refresh_model_chip()
